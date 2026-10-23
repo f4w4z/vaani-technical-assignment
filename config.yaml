@@ -1,0 +1,38 @@
+# Python 3.10+. Relative filesystem paths resolve from this configuration file.
+paths:
+  audio: data/sample_te.wav
+  output: outputs/result.json
+  cache_dir: .cache/huggingface
+
+runtime:
+  device: auto                 # auto, cpu, cuda, cuda:0, or mps
+  dtype: auto                  # auto, float32, float16, or bfloat16
+
+asr:
+  model_name: openai/whisper-large-v3
+  revision: main               # Pin a model commit for reproducible evaluation.
+  # A Transformers-compatible Whisper/IndicWhisper directory can be used here.
+  language: telugu
+  chunk_length_s: 30
+  batch_size: 1
+  generation:
+    task: transcribe
+    max_new_tokens: 256
+    num_beams: 1
+    do_sample: false
+
+llm:
+  model_name: Qwen/Qwen2.5-7B-Instruct
+  revision: main
+  system_prompt: >-
+    You are a helpful assistant. Answer the user's question clearly and
+    concisely in Telugu using Telugu script. If the request is unclear,
+    ask for clarification. Do not invent facts.
+  max_input_tokens: 2048
+  generation:
+    max_new_tokens: 256
+    do_sample: false            # Greedy decoding for a repeatable baseline.
+    # Used only when do_sample is true:
+    temperature: 0.7
+    top_p: 0.9
+    repetition_penalty: 1.05

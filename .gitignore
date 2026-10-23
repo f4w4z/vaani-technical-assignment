@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+.cache/
+outputs/
+tmp/
+
+# Local assignment/reference documents
+Email.pdf
+moshi.pdf
+qwen omni.pdf
