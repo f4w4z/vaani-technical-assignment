@@ -4,6 +4,7 @@ __pycache__/
 .cache/
 outputs/
 tmp/
+data/
 
 # Local assignment/reference documents
 Email.pdf

@@ -249,5 +249,55 @@ use `--quality-label` to name it for CSV. Plotting accepts only evaluation outpu
 not the prepared dataset JSON. Replace placeholder responses before interpreting
 quality plots. Existing plot files in the output directory are replaced.
 
+## Final verification and logging
+
+```powershell
+python verify_task2.py --config config.yaml --output-dir outputs/verification
+```
+
+`verify_task2.py` checks required source files and Python syntax, installed
+dependency versions/imports against `requirements.txt`, configuration types and
+ranges, Telugu transcription settings, deterministic decoding, and runtime device
+availability. It creates/checks write access for the pipeline output directory,
+model cache, verification directory, and default `data`, `outputs/evaluation` and
+`outputs/plots` directories. Default evaluation/plot directories follow the current
+working directory; configured paths follow the YAML directory. It does not create
+or change your real recordings or install/downgrade any packages.
+
+The script then generates exactly three silent dummy WAVs and runs the actual
+`SpeechPipeline` and `evaluate_dataset` with injected ASR/LLM stand-ins. Known
+perfect, substitution, and deletion cases are checked against fixed expected
+WER/CER, response scores, signed quality drops, stage times, end-to-end times,
+and RTF. Additional direct checks cover insertions, empty references, and Unicode
+normalization. Both model outputs **and clocks/timings are synthetic**: this is
+arithmetic and integration verification, not a Telugu accuracy or speed benchmark.
+No model weights are loaded or downloaded, but the normal Python dependencies
+must still be importable to load the existing pipeline module.
+
+Outputs are regenerated on each invocation:
+
+- `verification.log`: timestamped progress, check results, and error diagnostics.
+- `checks.json`: structured PASS/FAIL/WARN/UNAVAILABLE statuses and independent
+  setup-readiness / mock-pass indicators.
+- `summary.md`: copyable Markdown tables of setup checks and the three dummy
+  samples, plus corpus aggregates. Synthetic-results labeling stays with the table.
+- `mock/`: dummy audio, evaluator-compatible `test.json`, and normal evaluator
+  JSON/CSV reports, which can also be passed to `plot_results.py`.
+
+Exit status is 0 when no FAIL/UNAVAILABLE checks remain; warnings (such as a
+missing optional sample recording or unpinned model revisions) do not fail the
+run. A missing/broken dependency or version outside the declared range causes
+exit status 1. Other checks and the mock run are still attempted, and diagnostics
+are saved whenever the verification output directory is writable. The Markdown
+summary is printed as well as saved. The checks do not establish model checkpoint
+availability, chat-template compatibility, model memory requirements, or real
+speech/response quality; those require a labeled dataset and actual inference.
+
+To plot the clearly synthetic verification output:
+
+```powershell
+python plot_results.py --input outputs/verification/mock/report.json --output-dir outputs/verification/mock/plots --quality-label "Mock word overlap F1"
+```
+
 References: [Whisper usage](https://huggingface.co/openai/whisper-large-v3),
 [Qwen2.5 chat inference](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct).
