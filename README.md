@@ -219,5 +219,35 @@ successful-only quality/latency: excluding failures can make results look better
 The CLI saves partial reports and exits with status 1 if any sample failed.
 `--fail-fast` stops immediately instead, before final reports are saved.
 
+### Plot evaluation results
+
+Install the plotting dependency with `python -m pip install "matplotlib>=3.8,<4"`
+(also included in `requirements.txt`). No pandas, seaborn, or model imports are
+needed by `plot_results.py`.
+
+```powershell
+python plot_results.py --input outputs/evaluation/report.json --output-dir outputs/plots
+# Full sample CSV also supports both plots:
+python plot_results.py --input outputs/evaluation/samples.csv --output-dir outputs/csv_plots --quality-label "Word overlap F1"
+# The plotting-points CSV supports the scatter only:
+python plot_results.py --input outputs/evaluation/wer_vs_quality.csv --output-dir outputs/scatter
+```
+
+- `wer_vs_quality.png` shows ASR-transcript and human-transcript response scores
+  against ASR WER. Both series use the same WER x-coordinate per sample. WER is
+  a ratio and may exceed 1; no data is clipped at 100%.
+- `latency_breakdown.png` stacks mean ASR time, mean LLM time, and remaining
+  pipeline overhead. A separate bar shows the clean-transcript LLM latency when
+  provided. That baseline call is excluded from the pipeline bar.
+
+PNG files are rendered without opening a GUI, so the script also works on remote
+machines. Outputs use the successful sample population. JSON plots include the
+failed-sample count; CSV inputs cannot recover that metadata. Undefined scatter
+values are omitted with per-series counts shown in the legend; malformed numeric
+data and incomplete latency records are rejected. JSON metadata names the scorer;
+use `--quality-label` to name it for CSV. Plotting accepts only evaluation outputs,
+not the prepared dataset JSON. Replace placeholder responses before interpreting
+quality plots. Existing plot files in the output directory are replaced.
+
 References: [Whisper usage](https://huggingface.co/openai/whisper-large-v3),
 [Qwen2.5 chat inference](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct).
