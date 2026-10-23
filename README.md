@@ -59,6 +59,68 @@ the target hardware. The project does not implement a vLLM backend.
 
 ## Batch evaluation
 
+### Prepare a local dataset
+
+`prepare_data.py` creates the required JSON from a local folder or a CSV/TSV/JSON
+manifest. It selects up to 100 samples by default with a reproducible random
+seed, checks audio headers and labels, and retains Telugu in UTF-8. Audio files
+stay in their source location; generated paths resolve from the output JSON.
+
+For a folder, put a transcript and optional reference answer beside each audio:
+
+```text
+corpus/
+  question_001.wav
+  question_001.txt
+  question_001.response.txt
+```
+
+Folder discovery recursively includes WAV, FLAC, and OGG files. Transcript files
+contain only the spoken reference text, and response files contain a human-written
+answer appropriate to that request. Missing/empty transcripts are errors.
+
+```powershell
+python prepare_data.py --source corpus --output data/test.json --limit 100 --seed 42
+```
+
+Manifests use `audio_path`, `ground_truth_transcript`, and
+`ground_truth_response` columns by default; optional `id` values must be unique
+strings. CSV/TSV headers and JSON object keys can be mapped:
+
+```powershell
+python prepare_data.py --source corpus/labels.csv --audio-column path --transcript-column text --response-column answer --output data/test.json
+```
+
+Manifest audio paths resolve from the manifest directory. A JSON manifest must
+be an array of row objects. For a previously exported Telugu subset of FLEURS or
+IndicVoices, map its local audio and transcript columns in the same way. This
+utility works with local files; it does not download datasets or decode remote
+dataset-specific audio objects. It preserves provided text and does not infer
+whether a recording is actually Telugu, so select the Telugu subset upstream.
+
+Speech corpora often contain read sentences rather than questions and have no
+answer labels. For an explicit pipeline plumbing test, allow missing responses:
+
+```powershell
+python prepare_data.py --source corpus --output data/test.json --response-mode placeholder
+```
+
+Placeholder mode fills **only missing** responses with a fixed Telugu test
+string. Each row includes `response_source` (`provided` or `placeholder`), which
+the evaluator tolerates as an extra field. `test.metadata.json` records the
+source, subset seed/count, and placeholder count. **Response quality measured
+against placeholders is not a valid benchmark.** The evaluator does not
+automatically filter these rows. Replace placeholders with reviewed answers
+before interpreting response scores or error propagation. WER/CER still compare
+the real reference transcripts. No answers are generated with the evaluated LLM.
+
+Use `--limit 0` for every sample and `--overwrite` to replace existing prepared
+output. Selection is repeatable for the same source ordering and seed. Validation
+fails on missing/undecodable selected audio, duplicate audio/IDs, or empty labels;
+it does not silently drop samples. Output metadata is separate from the JSON array.
+
+### Run the evaluator
+
 `evaluate.py` implements word/character Levenshtein distance from scratch,
 measures latency and real-time factor, and compares each ASR-based answer with
 an answer generated from the human transcript. Both are scored against the
