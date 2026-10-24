@@ -275,6 +275,23 @@ use `--quality-label` to name it for CSV. Plotting accepts only evaluation outpu
 not the prepared dataset JSON. Replace placeholder responses before interpreting
 quality plots. Existing plot files in the output directory are replaced.
 
+### Correctness and hallucination rate
+
+`hallucination.py` computes the assignment's "correctness and hallucination
+rate" from saved `report.json` files without rerunning any model. For the
+synthesized corpus each reference answer states one checkable fact (capital
+name, or sum word); a response is `correct` if it contains that fact (sums
+also accept the digit form), `abstained` if it instead contains an uncertainty
+marker, and `hallucinated` otherwise. It is a lexical heuristic, not a
+semantic judge; `reports/task2.md` §2.1 gives the full definition and results.
+
+```powershell
+python hallucination.py --reports outputs/evaluation/clean/report.json outputs/evaluation/noisy_baseline/report.json outputs/evaluation/noisy_denoised/report.json --output outputs/evaluation/hallucination.json
+```
+
+It relies on the `question_cap-*` / `question_sum-*` audio file names that
+`synthesize_corpus.py` writes, so it only applies to that corpus.
+
 ### Research extension: denoising for the noisy condition
 
 `denoise.py` implements magnitude spectral subtraction (estimate a per-frequency

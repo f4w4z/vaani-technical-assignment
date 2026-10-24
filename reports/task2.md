@@ -149,6 +149,44 @@ and fluently in Telugu without being correct, rather than declining.
 Fixing this would require a larger LLM, which circles back to the VRAM
 constraint in §1.1.
 
+### 2.1 Correctness and hallucination rate (defined criteria)
+
+Word-overlap F1 is a weak correctness measure, so `hallucination.py` applies
+a stricter, fully specified test post hoc to each `report.json` (no model
+inference). Every reference answer states exactly one checkable fact: the
+capital name (`question_cap-*`) or the sum as a Telugu number word
+(`question_sum-*`). A response is:
+
+- **correct** if it contains that fact as a substring (for sums, the digit
+  form such as "5" also counts, matched as a whole number so "5" does not
+  match inside "15");
+- **abstained** if it is not correct but contains an uncertainty marker
+  (`తెలియదు` "don't know", `క్షమించండి` "sorry", `స్పష్టంగా లేదు` "not clear");
+- **hallucinated** otherwise: a wrong or off-topic answer asserted without
+  hedging, despite the system prompt's "ask for clarification, do not invent
+  facts" instruction.
+
+| Condition | Answer from | Correct | Abstained | Hallucinated | Hallucination rate |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Clean | ASR transcript | 0 | 0 | 129 | 1.000 |
+| Clean | human transcript | 3 | 0 | 126 | 0.977 |
+| Noisy | ASR transcript | 0 | 0 | 129 | 1.000 |
+| Noisy | human transcript | 3 | 0 | 126 | 0.977 |
+| Noisy, denoised | ASR transcript | 0 | 0 | 129 | 1.000 |
+| Noisy, denoised | human transcript | 3 | 0 | 126 | 0.977 |
+
+Two conclusions. First, the failure is almost entirely the LLM's: even from
+the perfect human transcript only 3 of 129 answers state the right fact, and
+the model **never abstains** (0 of 774 answers across all arms), so every
+miss is a confident non-answer or wrong answer. Second, the ASR-arm result
+being 0/129 in every condition (versus 3/129 from the human transcript) is
+consistent with the small F1 drop in §2: ASR errors cost little on top of an
+LLM that is already failing. The check is lexical, not semantic: a correct
+answer using a different inflection of the key fact is miscounted as
+hallucinated, so these rates are an upper bound on the true hallucination
+rate, though manual inspection of samples (§2) shows the answers are
+genuinely off-topic, not merely re-inflected.
+
 ## 3. Research extension: a measurable bottleneck and an attempted fix
 
 **Bottleneck.** The noisy condition's ASR WER (0.3377) is measurably worse
@@ -226,6 +264,7 @@ python evaluate.py --dataset data/test_noisy.json  --config config_denoised.yaml
 python plot_results.py --input outputs/evaluation/clean/report.json          --output-dir outputs/plots/clean
 python plot_results.py --input outputs/evaluation/noisy_baseline/report.json --output-dir outputs/plots/noisy_baseline
 python plot_results.py --input outputs/evaluation/noisy_denoised/report.json --output-dir outputs/plots/noisy_denoised
+python hallucination.py --reports outputs/evaluation/clean/report.json outputs/evaluation/noisy_baseline/report.json outputs/evaluation/noisy_denoised/report.json --output outputs/evaluation/hallucination.json
 python -m unittest discover -s tests -v
 ```
 

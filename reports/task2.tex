@@ -86,6 +86,33 @@ WER/CER are ratios (not percentages) and the evaluator computes them from scratc
 
 \textbf{The dominant quality bottleneck is the LLM, not the ASR.} Comparing \texttt{asr\_response\_quality} (answer generated from the noisy ASR transcript) against \texttt{clean\_response\_quality} (answer generated from the ground-truth transcript, same LLM, same question) isolates ASR's downstream effect: even with a \textbf{perfect} transcript, mean response quality is only \textbf{0.169} out of 1, and the exact-match rate is \textbf{0 out of 129} in every condition. Manual inspection of sample outputs (e.g.\ \texttt{corpus\_clean/question\_cap-001.wav}, ``What is Telangana's capital?'') shows \texttt{Qwen2.5-1.5B-Instruct} frequently failing to state the short correct answer at all, instead producing repetitive, loosely-related Telugu text that never names the capital. This is a genuine capability limit of the smallest Qwen2.5 checkpoint on Telugu factual recall and instruction-following, not an artifact of the ASR stage or the evaluation harness --- and it is a legitimate instance of the assignment's ``hallucination rate'' criterion: the model answers confidently and fluently in Telugu without being correct, rather than declining. Fixing this would require a larger LLM, which circles back to the VRAM constraint in \S1.1.
 
+\subsection{Correctness and hallucination rate (defined criteria)}
+
+Word-overlap F1 is a weak correctness measure, so \texttt{hallucination.py} applies a stricter, fully specified test post hoc to each \texttt{report.json} (no model inference). Every reference answer states exactly one checkable fact: the capital name (\texttt{question\_cap-*}) or the sum as a Telugu number word (\texttt{question\_sum-*}). A response is:
+
+\begin{itemize}[leftmargin=1.4em]
+\item \textbf{correct} if it contains that fact as a substring (for sums, the digit form such as ``5'' also counts, matched as a whole number so ``5'' does not match inside ``15'');
+\item \textbf{abstained} if it is not correct but contains an uncertainty marker (Telugu for ``I don't know'', ``sorry'', or ``not clear'');
+\item \textbf{hallucinated} otherwise: a wrong or off-topic answer asserted without hedging, despite the system prompt's ``ask for clarification, do not invent facts'' instruction.
+\end{itemize}
+
+\begin{center}
+\begin{tabular}{llrrrr}
+\toprule
+Condition & Answer from & Correct & Abstained & Hallucinated & Halluc.\ rate \\
+\midrule
+Clean & ASR transcript & 0 & 0 & 129 & 1.000 \\
+Clean & human transcript & 3 & 0 & 126 & 0.977 \\
+Noisy & ASR transcript & 0 & 0 & 129 & 1.000 \\
+Noisy & human transcript & 3 & 0 & 126 & 0.977 \\
+Noisy, denoised & ASR transcript & 0 & 0 & 129 & 1.000 \\
+Noisy, denoised & human transcript & 3 & 0 & 126 & 0.977 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Two conclusions. First, the failure is almost entirely the LLM's: even from the perfect human transcript only 3 of 129 answers state the right fact, and the model \textbf{never abstains} (0 of 774 answers across all arms), so every miss is a confident non-answer or wrong answer. Second, the ASR-arm result being 0/129 in every condition (versus 3/129 from the human transcript) is consistent with the small F1 drop in \S2: ASR errors cost little on top of an LLM that is already failing. The check is lexical, not semantic: a correct answer using a different inflection of the key fact is miscounted as hallucinated, so these rates are an upper bound on the true hallucination rate, though manual inspection of samples (\S2) shows the answers are genuinely off-topic, not merely re-inflected.
+
 \section{Research extension: a measurable bottleneck and an attempted fix}
 
 \textbf{Bottleneck.} The noisy condition's ASR WER (0.3377) is measurably worse than clean (0.2928) --- see \S2. An \textbf{initial} noisy corpus built at 8\,dB SNR showed almost no WER change (0.2913 vs.\ 0.2928 clean --- i.e.\ no real bottleneck to fix), so the noise level was increased to 0\,dB SNR (noise power equal to signal power) specifically to produce a bottleneck large enough to be worth addressing; \S2's noisy numbers are from that 0\,dB corpus.
@@ -145,6 +172,12 @@ python plot_results.py --input outputs/evaluation/noisy_baseline/report.json \
     --output-dir outputs/plots/noisy_baseline
 python plot_results.py --input outputs/evaluation/noisy_denoised/report.json \
     --output-dir outputs/plots/noisy_denoised
+
+python hallucination.py --reports \
+    outputs/evaluation/clean/report.json \
+    outputs/evaluation/noisy_baseline/report.json \
+    outputs/evaluation/noisy_denoised/report.json \
+    --output outputs/evaluation/hallucination.json
 
 python -m unittest discover -s tests -v
 \end{verbatim}
