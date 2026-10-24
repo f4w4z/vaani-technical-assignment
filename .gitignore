@@ -3,6 +3,7 @@ __pycache__/
 .venv/
 .cache/
 outputs/
+output/
 tmp/
 data/
 
@@ -10,3 +11,7 @@ data/
 Email.pdf
 moshi.pdf
 qwen omni.pdf
+
+# Synthesized evaluation corpora (regenerate with synthesize_corpus.py)
+corpus_clean/
+corpus_noisy/

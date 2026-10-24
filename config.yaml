@@ -9,21 +9,37 @@ runtime:
   dtype: auto                  # auto, float32, float16, or bfloat16
 
 asr:
-  model_name: openai/whisper-large-v3
-  revision: main               # Pin a model commit for reproducible evaluation.
+  # vasista22/whisper-telugu-small: a Telugu-only Whisper-small fine-tune, not
+  # openai/whisper-small or whisper-large-v3. The general whisper-small
+  # checkpoint transcribes Telugu speech into Devanagari/Hindi-looking script
+  # (and hallucinates on short clips) even with language forced to Telugu;
+  # whisper-large-v3 would fix that but does not fit this GPU's ~6.5 GB free
+  # VRAM alongside Qwen2.5-7B-Instruct. See reports/task2.md.
+  model_name: vasista22/whisper-telugu-small
+  # Not pinned: this repo's config/tokenizer files and model.safetensors
+  # resolved to two different "main" commits within the same process (likely
+  # upstream micro-commits during evaluation), so a single pinned hash broke
+  # loading. See reports/task2.md for the reproducibility caveat this leaves.
+  revision: main
   # A Transformers-compatible Whisper/IndicWhisper directory can be used here.
-  language: telugu
+  # null, not "telugu": this checkpoint is Telugu-only and its generation_config
+  # predates transformers' language/task validation, which raises ValueError if
+  # language/task are forced at all (asr.py drops both when language is falsy).
+  language: null
   chunk_length_s: 30
   batch_size: 1
+  # Research-extension bottleneck fix (denoise.py): off by default so baseline
+  # runs are unaffected; set true to evaluate the spectral-subtraction variant.
+  denoise: false
   generation:
-    task: transcribe
     max_new_tokens: 256
     num_beams: 1
     do_sample: false
 
 llm:
-  model_name: Qwen/Qwen2.5-7B-Instruct
-  revision: main
+  # Qwen2.5-1.5B-Instruct, not the 7B default: see the VRAM note under asr above.
+  model_name: Qwen/Qwen2.5-1.5B-Instruct
+  revision: 989aa7980e4cf806f80c7fef2b1adb7bc71aa306  # Pinned commit for reports/task2.md's run.
   system_prompt: >-
     You are a helpful assistant. Answer the user's question clearly and
     concisely in Telugu using Telugu script. If the request is unclear,

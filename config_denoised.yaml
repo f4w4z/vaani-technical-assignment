@@ -1,0 +1,38 @@
+# Same as config.yaml, with the research-extension denoising filter switched
+# on. Used only for the noisy-condition "improved" evaluate.py run; see
+# reports/task2.md for the baseline-vs-improved comparison this produces.
+paths:
+  audio: data/sample_te.wav
+  output: outputs/result.json
+  cache_dir: .cache/huggingface
+
+runtime:
+  device: auto
+  dtype: auto
+
+asr:
+  model_name: vasista22/whisper-telugu-small
+  revision: main  # Not pinned: see the note in config.yaml and reports/task2.md.
+  language: null
+  chunk_length_s: 30
+  batch_size: 1
+  denoise: true
+  generation:
+    max_new_tokens: 256
+    num_beams: 1
+    do_sample: false
+
+llm:
+  model_name: Qwen/Qwen2.5-1.5B-Instruct
+  revision: 989aa7980e4cf806f80c7fef2b1adb7bc71aa306  # Pinned commit for reports/task2.md's run.
+  system_prompt: >-
+    You are a helpful assistant. Answer the user's question clearly and
+    concisely in Telugu using Telugu script. If the request is unclear,
+    ask for clarification. Do not invent facts.
+  max_input_tokens: 2048
+  generation:
+    max_new_tokens: 256
+    do_sample: false
+    temperature: 0.7
+    top_p: 0.9
+    repetition_penalty: 1.05

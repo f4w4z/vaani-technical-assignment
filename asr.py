@@ -16,6 +16,8 @@ import torch
 from scipy.signal import resample_poly
 from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
 
+from denoise import spectral_subtract_denoise
+
 
 def resolve_runtime(device: str, dtype: str) -> tuple[torch.device, torch.dtype]:
     """Resolve an explicit device and precision shared by both wrappers."""
@@ -68,17 +70,28 @@ class ASRWrapper:
         dtype: str = "auto",
         cache_dir: str | None = None,
         revision: str = "main",
-        language: str = "telugu",
+        language: str | None = "telugu",
         chunk_length_s: float = 30,
         batch_size: int = 1,
         generation: Mapping[str, Any] | None = None,
+        denoise: bool = False,
     ) -> None:
         if chunk_length_s <= 0 or batch_size < 1:
             raise ValueError("chunk_length_s and batch_size must be positive")
+        self.denoise = denoise
         self.device, precision = resolve_runtime(device, dtype)
-        self.generation = {"task": "transcribe", "do_sample": False}
+        self.generation = {"do_sample": False}
         self.generation.update(generation or {})
-        self.generation["language"] = language
+        if language:
+            self.generation.setdefault("task", "transcribe")
+            self.generation["language"] = language
+        else:
+            # Some single-language fine-tunes (e.g. IndicWhisper checkpoints)
+            # ship an older generation_config that transformers rejects outright
+            # once `language`/`task` are passed to generate(); set language to
+            # null in config.yaml for those checkpoints instead of forcing it.
+            self.generation.pop("task", None)
+            self.generation.pop("language", None)
         processor = AutoProcessor.from_pretrained(
             model_name, cache_dir=cache_dir, revision=revision,
             trust_remote_code=False,
@@ -115,6 +128,8 @@ class ASRWrapper:
         if audio.shape[0] == 0 or not np.isfinite(audio).all():
             raise ValueError("Audio must contain finite, nonempty samples")
         audio = audio.mean(axis=1)
+        if self.denoise:
+            audio = spectral_subtract_denoise(audio, sample_rate)
         if sample_rate != self.sample_rate:
             divisor = math.gcd(sample_rate, self.sample_rate)
             audio = resample_poly(

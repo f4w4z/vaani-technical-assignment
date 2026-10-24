@@ -11,8 +11,13 @@ python pipeline.py --audio "data/question.wav"
 Use a real Telugu recording: no sample audio is bundled. WAV and FLAC are safe
 choices; other formats depend on your installed libsndfile. First use downloads
 the configured weights and needs internet access and disk space. Both models
-remain loaded together. The default large checkpoints need substantial memory;
-use `openai/whisper-small` and `Qwen/Qwen2.5-1.5B-Instruct` for a smaller smoke run.
+remain loaded together. `config.yaml` defaults to `openai/whisper-small` and
+`Qwen/Qwen2.5-1.5B-Instruct`, not the larger `whisper-large-v3` /
+`Qwen2.5-7B-Instruct` pair, because the two must fit in VRAM simultaneously;
+7 GB of free VRAM is not enough for both large checkpoints together (whisper-
+large-v3 alone is ~3 GB in fp16, and Qwen2.5-7B-Instruct is ~15 GB). Swap in
+the larger checkpoints if your hardware has headroom; `reports/task2.md`
+records which pair the submitted evaluation run actually used.
 CPU inference works but can be slow. Install the appropriate PyTorch GPU build
 for your system before installing the other requirements.
 
@@ -58,6 +63,27 @@ Model integration and real Telugu speech quality must be tested separately on
 the target hardware. The project does not implement a vLLM backend.
 
 ## Batch evaluation
+
+### Synthesize a Telugu evaluation corpus
+
+No recorded Telugu corpus is bundled or committed. `synthesize_corpus.py`
+builds one instead: it synthesizes ~130 template-generated Telugu factual
+Q&A pairs (Indian state/UT capitals, and small addition problems spoken as
+Telugu number words) to speech with the open `facebook/mms-tts-tel` model,
+writing two parallel corpora in `prepare_data.py`'s sidecar format:
+
+```powershell
+python synthesize_corpus.py --clean-out corpus_clean --noisy-out corpus_noisy
+```
+
+`corpus_clean/` holds the synthesized audio as-is. `corpus_noisy/` holds the
+same utterances with additive Gaussian noise at a fixed 8 dB SNR (`--snr-db`
+to change it). These are the two "linguistic or acoustic conditions" and the
+noisy corpus is also the bottleneck target for the research extension below.
+Both are synthetic speech, not real recordings; `reports/task2.md` states
+what that does and does not establish. Neither folder is committed (see
+`.gitignore`) — regenerate them with this script, which is deterministic for
+a fixed `--snr-db` given the same `transformers`/model revision.
 
 ### Prepare a local dataset
 
@@ -248,6 +274,29 @@ data and incomplete latency records are rejected. JSON metadata names the scorer
 use `--quality-label` to name it for CSV. Plotting accepts only evaluation outputs,
 not the prepared dataset JSON. Replace placeholder responses before interpreting
 quality plots. Existing plot files in the output directory are replaced.
+
+### Research extension: denoising for the noisy condition
+
+`denoise.py` implements magnitude spectral subtraction (estimate a per-frequency
+noise floor from each bin's low time-percentile magnitude, subtract it with a
+floor to limit musical-noise artifacts, reuse the original phase on resynthesis).
+It targets the measurable bottleneck the noisy condition exposes: additive noise
+raises ASR WER relative to the clean condition. It is wired into `asr.py` behind
+`asr.denoise` in the YAML config (default `false`, so existing runs are
+unaffected) and included in measured ASR/total latency when enabled, since it
+runs before transcription on every input, not only during evaluation.
+
+```powershell
+python evaluate.py --dataset data/test_noisy.json --config config.yaml --output-dir outputs/evaluation/noisy_baseline
+python evaluate.py --dataset data/test_noisy.json --config config_denoised.yaml --output-dir outputs/evaluation/noisy_denoised
+```
+
+`config_denoised.yaml` is identical to `config.yaml` except `asr.denoise: true`.
+Compare `outputs/evaluation/noisy_baseline/report.json` against
+`outputs/evaluation/noisy_denoised/report.json` (and both against the clean-
+condition run) for the baseline-vs-improved ablation; `reports/task2.md` reports
+the actual numbers for this corpus and this noise level. `tests/test_denoise.py`
+covers `spectral_subtract_denoise` directly, without downloading any model.
 
 ## Final verification and logging
 

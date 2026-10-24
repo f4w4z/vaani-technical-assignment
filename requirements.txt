@@ -1,6 +1,6 @@
 # Install a CUDA-compatible PyTorch build separately if using an NVIDIA GPU.
 torch>=2.2,<3
-transformers>=4.45,<5
+transformers>=4.45,<6
 numpy>=1.26,<3
 scipy>=1.11,<2
 soundfile>=0.12,<1

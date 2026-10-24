@@ -137,8 +137,15 @@ def validate_config(config: Any) -> None:
         if "top_p" in generation:
             require(positive(generation["top_p"]) and generation["top_p"] <= 1, f"{section}.generation.top_p must be in (0, 1]")
     asr, llm = config["asr"], config["llm"]
-    require(asr.get("language") in ("telugu", "te"), "asr.language must target Telugu (telugu or te)")
-    require(asr.get("generation", {}).get("task", "transcribe") == "transcribe", "ASR task must be transcribe")
+    asr_language = asr.get("language")
+    asr_model = str(asr.get("model_name", "")).lower()
+    require(
+        asr_language in ("telugu", "te")
+        or (asr_language is None and "telugu" in asr_model),
+        "asr.language must target Telugu (telugu or te), or be null only for a Telugu-specific checkpoint",
+    )
+    asr_task = asr.get("generation", {}).get("task", "transcribe")
+    require(asr_task in ("transcribe", None), "ASR task must be transcribe (or unset for a single-language checkpoint)")
     require(positive(asr.get("chunk_length_s", 30)), "asr.chunk_length_s must be positive")
     require(positive(asr.get("batch_size", 1), integer=True), "asr.batch_size must be a positive integer")
     require(positive(llm.get("max_input_tokens", 2048), integer=True), "llm.max_input_tokens must be a positive integer")
