@@ -292,6 +292,28 @@ python hallucination.py --reports outputs/evaluation/clean/report.json outputs/e
 It relies on the `question_cap-*` / `question_sum-*` audio file names that
 `synthesize_corpus.py` writes, so it only applies to that corpus.
 
+### Confidence intervals
+
+`bootstrap.py` gives a 95% paired bootstrap interval for the difference in
+corpus WER or CER between two `report.json` files, resampling questions
+(rows are paired by sample id, 10,000 resamples, fixed seed):
+
+```powershell
+python bootstrap.py --a outputs/evaluation/noisy_baseline/report.json --b outputs/evaluation/noisy_denoised/report.json --metric wer
+```
+
+An interval containing 0 means the difference is not distinguishable from
+question-sampling noise. It does not capture speaker or recording variation
+that the question set lacks.
+
+### Unified report
+
+`reports/report.pdf` is the single ACL-style paper that combines the
+architecture analysis and the Telugu evaluation (source: `reports/report.tex`;
+build with `pdflatex` twice from `reports/`). Its figures read the plots under
+`outputs/plots/`, so regenerate those first. `reports/task1.*` and
+`reports/task2.*` are the longer standalone write-ups of each part.
+
 ### Research extension: denoising for the noisy condition
 
 `denoise.py` implements magnitude spectral subtraction (estimate a per-frequency
