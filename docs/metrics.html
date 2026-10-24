@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Metrics and evaluation | Report</title>
+<meta name="description" content="Exactly how WER, CER, real-time factor, response quality, hallucination rate and bootstrap intervals are defined and computed.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem('docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+</head>
+<body data-page="metrics">
+<main id="content">
+
+<div class="eyebrow">Part II: Pipeline</div>
+<h1>Metrics and evaluation</h1>
+<p class="lead">The evaluation infrastructure is written from scratch in this repository. No evaluation library is used: edit distance, error rates, latency accounting, response scoring, hallucination classification and bootstrap intervals are all written in this repository.</p>
+
+<h2 id="normalization">Text normalization</h2>
+<p>Every reference and hypothesis passes through the same function before scoring: Unicode <strong>NFC</strong> normalization, then whitespace collapsed to single spaces. Case and punctuation are kept (Telugu has no case; punctuation differences count). NFC matters for Telugu because vowel signs and combining marks can be encoded in more than one equivalent way.</p>
+
+<h2 id="wer-cer">WER and CER</h2>
+<pre><code>WER = word_edits / reference_words
+CER = character_edits / reference_characters
+
+word units      = normalized text split on whitespace
+character units = Unicode code points of the text with whitespace removed
+edits           = unit-cost insertions + deletions + substitutions (Levenshtein)</code></pre>
+<ul>
+<li>The edit distance is a two-row dynamic program, O(N*M) time and O(min(N, M)) memory, implemented from scratch.</li>
+<li>Both are <strong>ratios, not percentages</strong>, and can exceed 1 because of insertions (the discarded whisper-small run reached a corpus WER of 2.56).</li>
+<li>CER counts code points, not grapheme clusters, so a Telugu consonant plus vowel sign counts as two units. This is applied identically to reference and hypothesis.</li>
+<li>An empty reference gives an undefined rate (<code>None</code>); dataset loading rejects empty references.</li>
+</ul>
+<h3 id="corpus-vs-sample">Corpus vs. per-sample</h3>
+<p><strong>Corpus WER/CER</strong> (the headline) = total edits over all samples divided by total reference length, so longer questions weigh more. The report also gives per-sample mean, median (p50) and 95th percentile, using linear interpolation between ranks.</p>
+
+<h2 id="latency">Latency and real-time factor</h2>
+<table>
+<thead><tr><th>Metric</th><th>Definition</th></tr></thead>
+<tbody>
+<tr><td><code>asr_seconds</code>, <code>llm_seconds</code>, <code>total_seconds</code></td><td>Wall clock with CUDA synchronization. Includes decoding, resampling, optional denoising and generation. Excludes model loading and metadata reads.</td></tr>
+<tr><td><code>rtf</code></td><td><code>total_seconds / audio_seconds</code> for one sample. Below 1 means faster than real time.</td></tr>
+<tr><td><code>asr_rtf</code></td><td><code>asr_seconds / audio_seconds</code>. ASR stage alone.</td></tr>
+<tr><td><code>corpus_rtf</code></td><td>Total pipeline seconds divided by total audio seconds over successful samples.</td></tr>
+<tr><td>Distributions</td><td>Mean, p50, p95 of each stage and of end-to-end time.</td></tr>
+</tbody>
+</table>
+<p>Audio duration is read from file metadata (frames / sample rate) without decoding samples. The extra "clean transcript" LLM call used for the paired comparison is <strong>excluded</strong> from pipeline latency and RTF, and reported separately (<code>clean_llm_seconds</code>).</p>
+
+<h2 id="quality">Response quality</h2>
+<p>The default score is <strong>multiset word-overlap F1</strong> in [0, 1], a transparent lexical proxy:</p>
+<pre><code>overlap = sum over words of min(count in reference, count in hypothesis)
+F1      = 2 * overlap / (|reference words| + |hypothesis words|)
+
+both empty -&gt; 1;  exactly one empty -&gt; 0;  word order is ignored</code></pre>
+<p>It is not semantic correctness: a valid paraphrase or a different inflection can score low, and a wrong answer that shares words with the reference can score higher than it deserves. That is why the stricter <a href="#hallucination">fact test</a> exists. A custom scorer (higher is better, finite, in [0, 1]) can be passed programmatically and is then applied to both arms.</p>
+<p>Exact-match rates (normalized equality with the reference answer) are also reported.</p>
+
+<h3 id="paired">The paired error-propagation comparison</h3>
+<p>Each question is answered twice by the <em>same</em> LLM, with deterministic decoding and no chat history, and both answers are scored against the <em>same</em> human reference answer:</p>
+<div class="flow">
+  <div class="node">Audio</div><span class="arrow">&rarr;</span><div class="node">ASR</div><span class="arrow">&rarr;</span><div class="node">LLM</div><span class="arrow">&rarr;</span><div class="node">answer from <strong>ASR transcript</strong></div>
+</div>
+<div class="flow">
+  <div class="node">Human transcript</div><span class="arrow">&rarr;</span><div class="node">same LLM</div><span class="arrow">&rarr;</span><div class="node">answer from <strong>perfect transcript</strong></div>
+</div>
+<ul>
+<li><code>quality_drop = clean_response_quality - asr_response_quality</code>. Positive means ASR errors hurt; negative means the ASR arm scored better.</li>
+<li><code>degraded_fraction</code> and <code>improved_fraction</code>: share of samples where the drop is above or below zero (tolerance 1e-12).</li>
+<li><code>response_agreement_f1</code>: F1 between the two arms' answers.</li>
+<li>The clean-arm answer is a baseline, not the scoring truth. The truth is always the human-written reference.</li>
+</ul>
+<p>This isolates ASR's downstream effect. When the two arms score about the same, the LLM, not the recognizer, is what limits quality.</p>
+
+<h2 id="hallucination">Correctness and hallucination rate</h2>
+<p>The requirements ask for "response correctness and hallucination rate using clearly defined evaluation criteria". Because each reference answer states exactly one fact, a response can be classified against it with a rule that needs no human judge. <code>hallucination.py</code> does this post hoc from saved <code>report.json</code> files, with no model inference.</p>
+<table>
+<thead><tr><th>Item</th><th>Definition</th></tr></thead>
+<tbody>
+<tr><td><strong>Key fact</strong></td><td>For a <code>question_cap-*</code> audio file: the capital name (last word of the reference answer). For <code>question_sum-*</code>: the sum word (the word before <span class="te">వస్తుంది</span>).</td></tr>
+<tr><td><strong>correct</strong></td><td>The normalized response contains the key fact as a substring. For sums, the digit form also counts, matched as a whole number (so "5" does not match inside "15").</td></tr>
+<tr><td><strong>abstained</strong></td><td>Not correct, but the response contains an uncertainty marker: <span class="te">తెలియదు</span> ("don't know"), <span class="te">క్షమించండి</span> ("sorry"), or <span class="te">స్పష్టంగా లేదు</span> ("not clear").</td></tr>
+<tr><td><strong>hallucinated</strong></td><td>Neither: a wrong or off-topic answer asserted without hedging, despite the system prompt telling the model to ask for clarification and not invent facts.</td></tr>
+</tbody>
+</table>
+<pre><code>correct_rate       = correct / samples
+hallucination_rate = hallucinated / samples</code></pre>
+<p>It is computed for both arms (answer from ASR transcript; answer from human transcript), so ASR-induced and LLM-induced failures can be told apart.</p>
+<div class="callout warn"><span class="title">Known limits of this test</span>
+It is a lexical heuristic. A correct answer in a different inflection of the key fact is miscounted as hallucinated, so the rate is an upper bound. A wrong answer that happens to contain the key fact inside longer text counts as correct. It only applies to this template corpus, since it reads the <code>cap-</code>/<code>sum-</code> markers in the audio file names. Manual inspection of samples shows the answers are genuinely off-topic, not merely re-inflected.</div>
+
+<h2 id="bootstrap">Confidence intervals</h2>
+<p><code>bootstrap.py</code> gives a 95% <strong>paired bootstrap</strong> interval for the difference in corpus WER or CER between two systems:</p>
+<ol>
+<li>Pair the two reports' rows by sample ID (same question in both).</li>
+<li>Resample the question indices with replacement, 10,000 times, with a fixed seed.</li>
+<li>For each resample, recompute each system's corpus rate (sum of edits / sum of reference units) and take the difference.</li>
+<li>Report the point difference and the 2.5th and 97.5th percentiles.</li>
+</ol>
+<p>An interval that contains 0 means the difference is not distinguishable from question-sampling noise. It does not capture speaker or recording variation, since the question set has none.</p>
+
+<h2 id="failures">Failure handling</h2>
+<p>A sample whose pipeline raises (for example an empty ASR transcript) is recorded in <code>failures.csv</code> and <strong>excluded from every aggregate</strong>. <code>samples_failed</code> and <code>failure_rate</code> sit next to the metrics, because a successful-only average can look better than the truth. The CLI still saves partial reports and exits with status 1; <code>--fail-fast</code> stops at the first failure instead. In the reported runs, 0 of 129 samples failed in every condition.</p>
+
+<h2 id="outputs">Evaluator outputs</h2>
+<table>
+<thead><tr><th>File</th><th>Contents</th></tr></thead>
+<tbody>
+<tr><td><code>report.json</code></td><td>Metadata, configuration, summary metrics, every paired output, per-sample measurements and failures. Strict UTF-8 JSON.</td></tr>
+<tr><td><code>samples.csv</code></td><td>One row per sample with all measurements (UTF-8 with BOM for spreadsheets).</td></tr>
+<tr><td><code>failures.csv</code></td><td>Sample id, path, error type and message.</td></tr>
+<tr><td><code>wer_vs_quality.csv</code></td><td>Plotting points: WER, ASR and clean response quality, quality drop.</td></tr>
+</tbody>
+</table>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

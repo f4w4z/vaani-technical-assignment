@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reproducibility | Report</title>
+<meta name="description" content="The exact environment, versions, seeds, determinism guarantees, and commit history behind the reported results.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem('docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+</head>
+<body data-page="repro">
+<main id="content">
+
+<div class="eyebrow">Reference</div>
+<h1>Reproducibility</h1>
+<p class="lead">Everything needed to rerun the experiments and know how close a rerun should land.</p>
+
+<h2 id="environment">Environment of the reported runs</h2>
+<table>
+<tbody>
+<tr><th>OS</th><td>Windows 11 (PowerShell and Git Bash)</td></tr>
+<tr><th>Python</th><td>3.13.4</td></tr>
+<tr><th>PyTorch</th><td>2.11.0+cu128</td></tr>
+<tr><th>transformers</th><td>4.57.6 (allowed range <code>&gt;=4.45,&lt;6</code>)</td></tr>
+<tr><th>Other dependencies</th><td>numpy &gt;=1.26, scipy &gt;=1.11, soundfile &gt;=0.12, PyYAML &gt;=6, matplotlib &gt;=3.8, packaging &gt;=23 (see <code>requirements.txt</code>)</td></tr>
+<tr><th>GPU</th><td>NVIDIA GeForce RTX 4060 Laptop, 8 GB total, about 6.5 GB free</td></tr>
+<tr><th>Precision</th><td>float16 on CUDA (<code>dtype: auto</code>)</td></tr>
+<tr><th>Decoding</th><td>Greedy for both ASR (<code>num_beams: 1</code>) and LLM (<code>do_sample: false</code>), plus one warm-up pass</td></tr>
+<tr><th>LaTeX (for the PDFs)</th><td>MiKTeX 25.12, <code>pdflatex</code></td></tr>
+</tbody>
+</table>
+
+<h2 id="models">Models and revisions</h2>
+<table>
+<thead><tr><th>Role</th><th>Model</th><th>Revision</th></tr></thead>
+<tbody>
+<tr><td>ASR</td><td><code>vasista22/whisper-telugu-small</code></td><td><code>main</code> (unpinned; see <a href="limitations.html">Limitations</a>)</td></tr>
+<tr><td>LLM</td><td><code>Qwen/Qwen2.5-1.5B-Instruct</code></td><td><code>989aa7980e4cf806f80c7fef2b1adb7bc71aa306</code></td></tr>
+<tr><td>TTS (data generation)</td><td><code>facebook/mms-tts-tel</code></td><td><code>main</code></td></tr>
+</tbody>
+</table>
+
+<h2 id="determinism">What is and is not deterministic</h2>
+<table>
+<thead><tr><th>Step</th><th>Deterministic?</th><th>Detail</th></tr></thead>
+<tbody>
+<tr><td>Question text and reference answers</td><td><span class="badge good">Yes</span></td><td>Fixed lists and arithmetic in <code>synthesize_corpus.py</code>.</td></tr>
+<tr><td>TTS audio</td><td><span class="badge bad">No</span></td><td>The TTS model's duration prediction is not seeded, so a fresh synthesis renders different audio for the same text.</td></tr>
+<tr><td>Noise addition</td><td><span class="badge good">Yes, given the clean audio</span></td><td>NumPy generator seeded with 42.</td></tr>
+<tr><td>Dataset subset selection</td><td><span class="badge good">Yes</span></td><td>Seeded (42); with <code>--limit 0</code> every sample is used.</td></tr>
+<tr><td>ASR and LLM output</td><td><span class="badge good">Yes, for fixed audio and hardware</span></td><td>Greedy decoding. Not guaranteed bit-identical across hardware or library versions.</td></tr>
+<tr><td>Latency numbers</td><td><span class="badge bad">No</span></td><td>Wall-clock time varies run to run and across machines.</td></tr>
+<tr><td>Bootstrap intervals</td><td><span class="badge good">Yes</span></td><td>Seeded (0 by default).</td></tr>
+</tbody>
+</table>
+<div class="callout warn"><span class="title">Expectation for a rerun</span>
+Because the TTS audio differs on a fresh run, expect WER and CER in the same neighborhood as the <a href="results.html">reported values</a>, not identical digits. The qualitative findings (noise hurts, denoiser flat, LLM never correct) should hold; the exact decimals will not.</div>
+
+<h2 id="commands">Commands</h2>
+<p>The full ordered command list is on the <a href="quickstart.html#reproduce">Quickstart</a>. In short: synthesize the corpus at <code>--snr-db 0</code>, build both manifests with <code>--limit 0</code>, run <code>evaluate.py</code> three times (clean; noisy with <code>config.yaml</code>; noisy with <code>config_denoised.yaml</code>), then plots, <code>hallucination.py</code> and <code>bootstrap.py</code>.</p>
+
+<h2 id="outputs">What is and is not in the repository</h2>
+<table>
+<thead><tr><th>Committed</th><th>Git-ignored (regenerate or obtain locally)</th></tr></thead>
+<tbody>
+<tr><td>All source, tests, both configs, <code>README.md</code>, <code>requirements.txt</code>, <code>AGENTS.md</code>, <code>DraftTask1.md</code>, the <code>reports/</code> sources and PDFs, this <code>docs/</code> site</td><td><code>outputs/</code> (evaluation reports, plots), <code>data/</code> (manifests), <code>corpus_clean/</code>, <code>corpus_noisy/</code>, <code>.cache/</code> (model weights), <code>tmp/</code>, <code>__pycache__/</code>, <code>.venv/</code>, and the local copies of the two source papers (<code>moshi.pdf</code>, <code>qwen omni.pdf</code>)</td></tr>
+</tbody>
+</table>
+<p>The result plots and diagrams on this site are copies stored in <code>docs/assets/img/</code> so the site works without the ignored folders.</p>
+
+<h2 id="history">Commit history</h2>
+<table class="compact">
+<thead><tr><th>Commit</th><th>Date</th><th>Message</th></tr></thead>
+<tbody>
+<tr><td><code>5df1efa</code></td><td>2026-10-24</td><td>docs: add unified ACL-style report with bootstrap confidence intervals</td></tr>
+<tr><td><code>c83d51e</code></td><td>2026-10-24</td><td>feat: add explicit correctness and hallucination rate to Task 2</td></tr>
+<tr><td><code>b205d73</code></td><td>2026-10-24</td><td>feat: finalize Task 1 report and run real Task 2 evaluation</td></tr>
+<tr><td><code>2e87b8b</code></td><td>2026-10-23</td><td>feat: verify Task 2 setup and mock metrics</td></tr>
+<tr><td><code>4fa0cde</code></td><td>2026-10-23</td><td>feat: plot evaluation quality and latency</td></tr>
+<tr><td><code>965bb5c</code></td><td>2026-10-23</td><td>feat: prepare reproducible Telugu test datasets</td></tr>
+<tr><td><code>02c63c6</code></td><td>2026-10-23</td><td>docs: record incremental commit workflow</td></tr>
+<tr><td><code>56fcb35</code></td><td>2026-10-23</td><td>feat: add paired speech pipeline evaluation</td></tr>
+<tr><td><code>e3dfd04</code></td><td>2026-10-23</td><td>feat: add Telugu speech pipeline</td></tr>
+</tbody>
+</table>
+<p>Check the repository for anything newer than this table.</p>
+
+<h2 id="paper">Rebuilding the PDFs</h2>
+<pre><code>cd reports
+pdflatex report.tex   # twice, for cross-references
+pdflatex report.tex
+pdflatex task1.tex
+pdflatex task2.tex</code></pre>
+<p>The paper's Part II figures include <code>outputs/plots/*.png</code>; <code>task2.tex</code> does too. <code>task1.tex</code> is self-contained (its diagrams are TikZ). The sources contain no Telugu script because plain <code>pdflatex</code> cannot render it.</p>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

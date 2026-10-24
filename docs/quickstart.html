@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quickstart | Report</title>
+<meta name="description" content="Install, run the pipeline on one audio file, run the tests, and reproduce every number in the reports.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem('docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+</head>
+<body data-page="quickstart">
+<main id="content">
+
+<div class="eyebrow">Start</div>
+<h1>Quickstart</h1>
+<p class="lead">From a clean checkout to a transcript, a test run, and the full reproduction of the reported results.</p>
+
+<h2 id="requirements">Requirements</h2>
+<ul>
+<li>Python 3.10 or newer (the reported run used 3.13.4).</li>
+<li>Internet on first use, to download model weights from Hugging Face (roughly 1 to 3 GB in total).</li>
+<li>A GPU is optional but strongly recommended. The reported run used an RTX 4060 Laptop (8 GB, about 6.5 GB free). CPU works but is slow, mostly because of the LLM stage.</li>
+<li>Telugu text in the console: on Windows, printing Telugu to a cp1252 console raises <code>UnicodeEncodeError</code>. Write output to a file or set <code>PYTHONIOENCODING=utf-8</code>.</li>
+</ul>
+
+<h2 id="install">Install</h2>
+<pre><code>python -m pip install -r requirements.txt</code></pre>
+<div class="callout note"><span class="title">GPU builds of PyTorch</span>
+<code>requirements.txt</code> lists plain <code>torch</code>. For an NVIDIA GPU, install the CUDA build of PyTorch for your system first, then run the command above. The reported run used <code>torch 2.11.0+cu128</code> and <code>transformers 4.57.6</code> (the pin allows <code>&gt;=4.45,&lt;6</code>).</div>
+
+<h2 id="run-one">Run the pipeline on one recording</h2>
+<p>No sample audio is bundled. Use any real Telugu WAV or FLAC file (other formats depend on your libsndfile).</p>
+<pre><code>python pipeline.py --audio "path/to/question.wav"</code></pre>
+<p>It prints JSON and saves it to <code>paths.output</code> from the config (default <code>outputs/result.json</code>). Fields: <code>audio_path</code>, <code>transcript</code>, <code>response</code>, <code>asr_seconds</code>, <code>llm_seconds</code>, <code>total_seconds</code>. See <a href="pipeline.html#output">pipeline output</a>.</p>
+<p>Or from Python:</p>
+<pre><code>from pipeline import SpeechPipeline, load_config
+
+pipeline = SpeechPipeline.from_config(load_config("config.yaml"))
+result = pipeline.run("path/to/question.wav")
+print(result.transcript, result.response, result.total_seconds)</code></pre>
+
+<h2 id="tests">Run the tests</h2>
+<p>All 30 tests are offline: no model downloads, no GPU.</p>
+<pre><code>python -m unittest discover -s tests -v</code></pre>
+<p>Use <code>-s tests</code> (not <code>python -m unittest tests.test_x</code>), because the test folder is not a package. Details on <a href="tests.html">the tests page</a>.</p>
+
+<h2 id="verify">Check your setup</h2>
+<pre><code>python verify_task2.py --config config.yaml --output-dir outputs/verification</code></pre>
+<p>Checks required files, dependency versions, configuration, device and output folders, then runs the real evaluator on three dummy samples with injected stand-ins and fixed expected values. It writes <code>verification.log</code>, <code>checks.json</code> and <code>summary.md</code>. The timings in its mock table are synthetic by design. It does not prove model quality or memory fit.</p>
+
+<h2 id="reproduce">Reproduce every reported number</h2>
+<p>Run from the repository root, in order. The synthesized corpora and <code>outputs/</code> are not committed, so these commands regenerate them.</p>
+<pre><code># 1. synthesize the Telugu corpus (clean + 0 dB noisy)
+python synthesize_corpus.py --clean-out corpus_clean --noisy-out corpus_noisy --snr-db 0
+
+# 2. build evaluator manifests
+python prepare_data.py --source corpus_clean --output data/test_clean.json --limit 0 --seed 42
+python prepare_data.py --source corpus_noisy --output data/test_noisy.json --limit 0 --seed 42
+
+# 3. evaluate three conditions (each loads both models once)
+python evaluate.py --dataset data/test_clean.json --config config.yaml --output-dir outputs/evaluation/clean --warmup 1
+python evaluate.py --dataset data/test_noisy.json --config config.yaml --output-dir outputs/evaluation/noisy_baseline --warmup 1
+python evaluate.py --dataset data/test_noisy.json --config config_denoised.yaml --output-dir outputs/evaluation/noisy_denoised --warmup 1
+
+# 4. plots, hallucination rate, confidence intervals
+python plot_results.py --input outputs/evaluation/clean/report.json --output-dir outputs/plots/clean
+python plot_results.py --input outputs/evaluation/noisy_baseline/report.json --output-dir outputs/plots/noisy_baseline
+python plot_results.py --input outputs/evaluation/noisy_denoised/report.json --output-dir outputs/plots/noisy_denoised
+python hallucination.py --reports outputs/evaluation/clean/report.json outputs/evaluation/noisy_baseline/report.json outputs/evaluation/noisy_denoised/report.json --output outputs/evaluation/hallucination.json
+python bootstrap.py --a outputs/evaluation/noisy_baseline/report.json --b outputs/evaluation/noisy_denoised/report.json --metric wer</code></pre>
+
+<div class="callout warn"><span class="title">Expect small differences</span>
+Evaluation is greedy and deterministic for fixed audio, but the TTS step is not seeded, so a fresh synthesis renders slightly different audio. Your absolute numbers will be close to, not identical to, those on <a href="results.html">the results page</a>. Each of the three evaluations takes roughly 20 to 25 minutes on the reference GPU.</div>
+
+<h2 id="report">Rebuild the paper</h2>
+<pre><code>cd reports
+pdflatex report.tex
+pdflatex report.tex</code></pre>
+<p>Run it twice for cross-references. The figures read the plots under <code>outputs/plots/</code>, so regenerate those first. See <a href="repro.html">Reproducibility</a> for the full environment.</p>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

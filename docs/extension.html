@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Denoising extension | Report</title>
+<meta name="description" content="The research extension: noise as a measurable bottleneck, spectral subtraction as the fix, the ablation, a parameter sweep, and an honest negative result.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem('docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+</head>
+<body data-page="extension">
+<main id="content">
+
+<div class="eyebrow">Part II: Pipeline</div>
+<h1>Research extension: denoising</h1>
+<p class="lead">The requirement is to identify a measurable bottleneck, implement one improvement, and compare it against the baseline. The bottleneck is acoustic noise. The improvement is spectral subtraction. It did not help, and this page shows how that was established.</p>
+
+<div class="callout good"><span class="title">Outcome</span>
+Noise raises WER by +0.045 (95% CI +0.014 to +0.077). Denoising changes it by +0.001 (CI -0.014 to +0.017): no measurable effect. Aggressive settings make it worse.</div>
+
+<h2 id="bottleneck">The bottleneck</h2>
+<p>Additive noise degrades recognition: corpus WER 0.2928 (clean) to 0.3377 (noisy, 0 dB SNR), CER 0.0745 to 0.0964. The effect is real by the paired bootstrap, even though the clean and noisy renderings differ (see <a href="dataset.html#pairing">pairing</a>).</p>
+<p>An earlier noisy corpus at 8 dB SNR showed no real effect (WER 0.2913 vs. 0.2928 clean), so there was no bottleneck to fix. The noise was increased to 0 dB specifically to create one worth addressing. That is a deliberate experimental choice, disclosed here and in the paper.</p>
+
+<h2 id="method">The fix: magnitude spectral subtraction</h2>
+<p><code>denoise.py</code> implements a classical technique (Boll, 1979), not a novel one. What is evaluated is whether it narrows the clean/noisy gap for this pipeline, at what cost, on this data. It runs before ASR on every input when <code>asr.denoise: true</code>.</p>
+<pre><code>1. STFT of the mono signal (window = min(1024, length), scipy.signal.stft)
+2. magnitude |S| and phase of every bin
+3. noise floor N[f] = 10th percentile of |S[f, t]| over time, per frequency bin
+4. cleaned = max(|S| - oversubtraction * N, floor * |S|)
+5. keep the original phase; inverse STFT; trim or pad to the input length
+6. if peak &gt; 1, scale down to avoid clipping</code></pre>
+<table>
+<thead><tr><th>Parameter</th><th>Default</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td><code>noise_percentile</code></td><td>10.0</td><td>Which low percentile of each bin's magnitude over time counts as noise. Lower = closer to the quietest frames.</td></tr>
+<tr><td><code>oversubtraction</code></td><td>1.5</td><td>How aggressively the floor is subtracted.</td></tr>
+<tr><td><code>floor</code></td><td>0.05</td><td>Minimum fraction of the original magnitude kept per bin, so subtraction cannot zero out frames or invert the spectrum. Limits "musical noise".</td></tr>
+</tbody>
+</table>
+<p>Inputs shorter than 8 samples pass through unchanged. Invalid input (not 1-D, empty, non-finite, out-of-range parameters) raises <code>ValueError</code>.</p>
+<div class="callout note"><span class="title">A property worth knowing</span>
+The noise estimate assumes each frequency bin has quiet frames somewhere in the clip, as speech does. A <em>sustained pure tone</em> has none, so its own energy becomes the "noise floor" and gets crushed. The first version of the unit test used a constant tone and failed for exactly this reason; the test now uses a bursty tone with silent gaps, which matches speech.</div>
+
+<h2 id="ablation">The ablation</h2>
+<p>Both runs read the <strong>identical</strong> <code>corpus_noisy/</code> audio and differ only in <code>asr.denoise</code> (<code>config.yaml</code> vs. <code>config_denoised.yaml</code>).</p>
+<table>
+<thead><tr><th>Metric</th><th class="num">Noisy, baseline</th><th class="num">Noisy, denoised</th><th class="num">Change</th><th class="num">95% CI</th></tr></thead>
+<tbody>
+<tr><td>Corpus WER</td><td class="num">0.3377</td><td class="num">0.3391</td><td class="num">+0.0014</td><td class="num">-0.0144 to +0.0174</td></tr>
+<tr><td>Corpus CER</td><td class="num">0.0964</td><td class="num">0.0992</td><td class="num">+0.0028</td><td class="num">-0.0041 to +0.0099</td></tr>
+<tr><td>Mean ASR time (s)</td><td class="num">2.054</td><td class="num">2.026</td><td class="num">-0.028</td><td class="num"></td></tr>
+<tr><td>Mean response F1 (ASR input)</td><td class="num">0.1548</td><td class="num">0.1547</td><td class="num">-0.0001</td><td class="num"></td></tr>
+<tr><td>Correct answers (of 129)</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num"></td></tr>
+</tbody>
+</table>
+<p><strong>Result:</strong> no improvement. Both error rates moved by a hair in the wrong direction, well inside the noise. Latency overhead was negligible (denoising is cheap next to ASR and LLM inference).</p>
+
+<h2 id="sweep">Was the default just badly tuned?</h2>
+<p>Before accepting a flat result, a quick ASR-only sweep (same checkpoint, no LLM stage, so it runs fast) compared the default against a more aggressive setting on the first 25 questions (all capitals):</p>
+<table>
+<thead><tr><th>Setting</th><th class="num">Mean WER, 25 questions</th></tr></thead>
+<tbody>
+<tr><td>No denoising (baseline)</td><td class="num">0.5433</td></tr>
+<tr><td>Mild: <code>oversubtraction=1.5, floor=0.05</code> (the shipped default)</td><td class="num">0.5300</td></tr>
+<tr><td>Aggressive: <code>oversubtraction=3.0, floor=0.02</code></td><td class="num">0.5567</td></tr>
+</tbody>
+</table>
+<p>On this slice mild subtraction helped slightly (about -2.4% relative) and aggressive subtraction made things <strong>worse</strong> than no denoising. That fits spectral-subtraction theory: over-subtraction leaves isolated spurious spectral peaks ("musical noise") that a neural recognizer can handle worse than the original stationary noise.</p>
+<p>The default <em>is</em> the "mild" setting, so the slice result does not contradict the full 129-sample ablation. It indicates the effect is small, inconsistent across subsets, and not distinguishable from noise, while aggressive tuning is counterproductive. With only 25 questions this is suggestive, not established. No further tuning was done on purpose: sweeping until something wins on a small set would be cherry-picking.</p>
+
+<h2 id="signal-level">Is the filter even working?</h2>
+<p>A direct waveform check on one sample confirms it does what it should at the signal level:</p>
+<table>
+<thead><tr><th>Quantity</th><th class="num">Noisy</th><th class="num">Denoised</th></tr></thead>
+<tbody>
+<tr><td>RMS energy</td><td class="num">0.228</td><td class="num">0.177</td></tr>
+<tr><td>Mean squared error to an independently synthesized clean rendering of the same text</td><td class="num">0.094</td><td class="num">0.073</td></tr>
+</tbody>
+</table>
+<p>(The comparison clip is a separate TTS rendering of the same words, so this is a rough proxy, not a true SNR.) So the negative result is about whether that cleanup <em>survives through the recognizer</em> into fewer errors, not about the code being broken. A Whisper-style model is trained on varied noisy audio and may already be fairly robust to this kind of stationary noise.</p>
+
+<h2 id="takeaway">Takeaway</h2>
+<ul>
+<li>A measurable bottleneck was found and quantified with an interval.</li>
+<li>An improvement was implemented, unit-tested and evaluated on identical audio.</li>
+<li>It did not help, and over-tuning hurt. That is reported as a negative result rather than tuned away.</li>
+<li>Given Part II's other finding (the LLM, not ASR, limits answers), the larger lever is a bigger LLM, not a better front end.</li>
+</ul>
+<h3 id="run">Run it</h3>
+<pre><code>python evaluate.py --dataset data/test_noisy.json --config config.yaml          --output-dir outputs/evaluation/noisy_baseline --warmup 1
+python evaluate.py --dataset data/test_noisy.json --config config_denoised.yaml --output-dir outputs/evaluation/noisy_denoised --warmup 1
+python bootstrap.py --a outputs/evaluation/noisy_baseline/report.json --b outputs/evaluation/noisy_denoised/report.json --metric wer</code></pre>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

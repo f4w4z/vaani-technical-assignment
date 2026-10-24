@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Architecture analysis | Report</title>
+<meta name="description" content="Moshi vs. Qwen2.5-Omni compared along seven architectural axes, with three ranked limitations and the four decisions hidden in end-of-speech.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem('docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+</head>
+<body data-page="task1">
+<main id="content">
+
+<div class="eyebrow">Part I: Analysis</div>
+<h1>Architecture analysis</h1>
+<p class="lead">Two recent speech LLMs, compared on seven architectural axes, and an answer to the research question: what architectural limitations stop speech LLMs from low-latency, natural, real-time conversation?</p>
+
+<div class="callout warn"><span class="title">No experiments in this part</span>
+Everything about the models here is a statement from the two source reports, cited by section and printed page (M = Moshi, Q = Qwen2.5-Omni). Consequences drawn from them are interpretation, and the proposal is a proposal. No gain, dataset size, parameter count or runtime is claimed.</div>
+
+<h2 id="thesis">The thesis</h2>
+<p><strong>Streaming speech generation is not sufficient for natural real-time conversation</strong>, because conversational control, deciding when to continue, hold, or yield while still listening, is not fully specified as a separate policy in these reports and is not measured by first-audio latency.</p>
+<p>This is about control of the conversational <em>floor</em>, not about emitting audio incrementally. Moshi explicitly supports simultaneous listening and speaking, with turn-taking learned inside joint stream modeling. Qwen2.5-Omni describes streaming perception and generation. Those are different kinds of evidence. The research opportunity is to test whether a separately supervised controller can better tell a listener's response from an attempt to take the floor.</p>
+
+<h2 id="choice">Why these two models</h2>
+<ul>
+<li><strong>Moshi</strong> (Défossez et al., 2024): a full-duplex speech-text foundation model for real-time dialogue. Speech to speech.</li>
+<li><strong>Qwen2.5-Omni</strong> (Qwen Team, 2025): a streaming omni-modal model with a Thinker (text LLM) and a Talker (speech generator). Also produces speech.</li>
+</ul>
+<p>Both are recent, both stream, and both produce speech, so the "at least one speech-to-speech" requirement is met twice. They also represent two different answers to the same problem: one jointly models both speakers' audio streams, the other bolts a speech decoder onto a multimodal LLM.</p>
+
+<h2 id="axes">Seven-axis comparison</h2>
+<p>Each cell is a statement from the cited report. Section and page references use the report's printed page numbers.</p>
+<table class="compact">
+<thead><tr><th>Axis</th><th>Moshi</th><th>Qwen2.5-Omni</th></tr></thead>
+<tbody>
+<tr><td><strong>1. Encoder and representation learning</strong></td>
+<td>Mimi: causal SeaNet convolutional codec (strides 4, 5, 6, 8, plus a final stride 2) with 8-layer causal Transformers before and after quantization. 24 kHz audio to 512-d at 12.5 Hz. 8 codebooks of 2,048 entries, 1.1 kbps. (M §3.3.1, pp.10-11)</td>
+<td>128-channel mel input (25 ms window, 10 ms hop), about 40 ms per representation. Audio encoder initialized from Whisper-large-v3, with block-wise attention. (Q §2.2, p.4; §3, p.6)</td></tr>
+<tr><td><strong>2. Semantic vs. acoustic representations</strong></td>
+<td>Split quantizer: one semantic VQ distilled from WavLM (cosine loss; the non-causal teacher is used in training only) plus a 7-level acoustic RVQ, summed for reconstruction. (M §3.3.2, p.12)</td>
+<td>Input: encoder representations. Output: discrete codes from <code>qwen-tts-tokenizer</code>. Talker is conditioned on Thinker hidden states (semantic) plus sampled text-token embeddings (phonetic). (Q §2.3, p.5)</td></tr>
+<tr><td><strong>3. Speech-to-LLM alignment</strong></td>
+<td>No adapter. Parallel token streams (both speakers' audio plus Moshi's own text) enter a Helium-initialized Temporal Transformer as summed learned embeddings. "Inner monologue" aligns self-text via Whisper timestamps and PAD/EPAD tokens. (M §3.4.1, §3.4.4, pp.13-17)</td>
+<td>Adapters align the audio encoder to the Thinker LLM, trained first while the LLM is frozen. Talker consumes Thinker hidden states and text embeddings as a dual-track decoder. (Q §2.1, p.3; §3, p.6)</td></tr>
+<tr><td><strong>4. Streaming vs. non-streaming</strong></td>
+<td>Causal 80 ms frames. User and system streams modeled jointly so listening and speaking overlap. Reported latency 160 ms theoretical, 200 ms practical. (M abstract, p.1; §3.3.1, p.11)</td>
+<td>Block-wise input attention over 2 s blocks. Waveform decoding by a DiT over 4 blocks (2 lookback, 1 lookahead) and chunked BigVGAN. No numerical end-to-end latency reported. (Q §2.4, p.5)</td></tr>
+<tr><td><strong>5. Autoregressive vs. non-autoregressive</strong></td>
+<td>Hierarchical autoregression: a Temporal Transformer over time and a Depth Transformer over codebooks within a step. Mimi decodes the codes. (M §3.4.1, pp.12-14)</td>
+<td>Thinker and Talker are autoregressive. Mel generation is flow-matching (iterative, not token by token) followed by BigVGAN. (Q §§2.1-2.4, pp.3-5)</td></tr>
+<tr><td><strong>6. End-of-speech and stopping</strong></td>
+<td>No utterance-end token. Continuous streams represent speech or silence. PAD/EPAD structure text timing; they do not command a stop. (M §3.4.4, pp.16-17)</td>
+<td>Text EOS and ChatML message boundaries. Interruption handling is not specified. (Q Fig. 2, p.3; §4.1, p.6)</td></tr>
+<tr><td><strong>7. Training objectives and data</strong></td>
+<td>Helium text pretraining (2.1T tokens), audio pretraining (7M hours, mostly English), multi-stream post-training, Fisher fine-tuning (2,000 h), synthetic instruction tuning (over 20,000 h). Cross-entropy with semantic weight 100, acoustic weight 1. (M §4, pp.17-21)</td>
+<td>Frozen-LLM alignment, then all-parameter training (800B image/video, 300B audio, 100B video-audio tokens), context 8k to 32k. Talker: continuation, DPO ranked by WER and punctuation-pause error, speaker tuning. (Q §3, §4.3, pp.6-7)</td></tr>
+</tbody>
+</table>
+
+<div class="callout note"><span class="title">Data figures overlap</span>
+Moshi's 7M, 2,000 and 20,000-hour figures, plus a separate 170-hour set used for TTS training, overlap and must not be added into a unique-data total.</div>
+
+<figure class="fig" id="fig-architecture">
+<img src="assets/img/fig-architecture.png" alt="Architecture and timing diagrams for Moshi (top) and Qwen2.5-Omni (bottom), with the proposed controller overlay in dashed orange.">
+<figcaption><b>Figure 1.</b> Architecture and timing dependencies. Top: Moshi (M §§3.3-3.4, pp.9-17; abstract, p.1). Bottom: Qwen2.5-Omni (Q §§2.1-2.4, pp.3-5; §3, p.6). Arrows show dependencies, not proportional execution time. Solid = established pipeline; dashed gray = training-only path; dashed orange = the proposed yielding controller (a proposal, not a reported or evaluated component).</figcaption>
+</figure>
+
+<h2 id="unreported">What the reports do not specify</h2>
+<p>These gaps block matched comparison. They do not show a performance failure.</p>
+<ul>
+<li>Neither report fully specifies input-endpoint, playback-completion/flush, or session-stop rules.</li>
+<li>Qwen2.5-Omni leaves interruption handling unspecified.</li>
+<li>Qwen2.5-Omni does not report output-codec rate, codebooks or bitrate; adapter dimensions or depth; output-block duration; numerical end-to-end latency; audio training hours or named corpora; or complete tokenizer objectives.</li>
+<li>Moshi's practical-latency figure comes without a complete measurement protocol.</li>
+<li>Qwen's "causal decoder" wording sits beside a DiT with one lookahead block.</li>
+<li>Per-stage compute durations (encoder, Transformer, decoder, queue) are unreported for both, so no latency budget can be divided across stages.</li>
+</ul>
+
+<h2 id="limitations">Three ranked limitations</h2>
+<p>This is the answer to the research question. Each limitation is interpretation built on the cited mechanisms, not a result either paper reports.</p>
+
+<h3 id="l1">L1. Continuous generation leaves conversational decisions implicit</h3>
+<p>Moshi's joint streams remove the turn boundary and let it listen while speaking (M §1, p.2; §3.4.4, p.17). What remains open is <em>when</em> that learned behavior correctly keeps or gives up the floor. Moshi evaluates gaps, overlaps and dialogue quality (M §5.6, p.31), but aggregate distributions cannot show whether one backchannel caused an inappropriate stop. Continuous modeling is a prerequisite for studying floor control, not evidence that it is handled well. Qwen2.5-Omni's streaming does not establish event-level behavior either.</p>
+
+<h3 id="l2">L2. Low transport delay does not establish timely social action</h3>
+<p>Causal frames and hierarchical prediction (Moshi), or block-wise processing and bounded-context waveform decoding (Qwen), shorten the delay between input and output audio. But first-audio latency measures onset, not whether the system stops after a real interruption while talking through a backchannel.</p>
+<p>Two trivial strategies expose the problem. Suppressing output whenever speech appears gives fast stopping for free. Refusing to stop gives few false yields for free. Neither is a better conversation. Any evaluation must compare false yields <em>only</em> under common interruption-latency and missed-interruption limits, and the timing account has to include input buffering, controller computation and playback queues.</p>
+
+<h3 id="l3">L3. Available cues and supervision may be insufficient</h3>
+<p>Speech activity says that someone is making sound, not why. Telling acknowledgment, hesitation and interruption apart needs context, and generation state (is the assistant finishing a phrase, waiting, or mid-explanation?) is a candidate cue whose usefulness has to be tested. Supervision matters too: Moshi notes limits of simulated dialogue without overlap, and Qwen acknowledges noisy speech supervision (M §4.4, pp.20-21; Q §4.3, p.7). A measured gain must be attributed to a controlled intervention, not to differences between training corpora.</p>
+
+<h2 id="four-decisions">"End of speech" is four decisions</h2>
+<p>End-of-speech detection and stopping criteria are part of the analysis. The key observation is that the phrase conflates four decisions a conversational system must make separately.</p>
+<table>
+<thead><tr><th>Decision</th><th>Meaning</th><th>Observable contrast</th></tr></thead>
+<tbody>
+<tr><td><strong>Input endpoint</strong></td><td>The user has finished the current contribution</td><td>Hesitation pause vs. completed question</td></tr>
+<tr><td><strong>Conversational yield</strong></td><td>The assistant gives the user the floor</td><td>Backchannel vs. genuine interruption</td></tr>
+<tr><td><strong>Output completion</strong></td><td>The intended response has finished playing</td><td>Intended end vs. playback and queue state</td></tr>
+<tr><td><strong>Session termination</strong></td><td>Conversation processing stops running</td><td>Explicit stop vs. ongoing listening</td></tr>
+</tbody>
+</table>
+<p>Moshi establishes continuous listening and generation including silence; PAD/EPAD concern text timing, not a stand-alone stop command (M §3.4.4, pp.16-17). Qwen2.5-Omni establishes text and message boundaries and streaming waveform generation (Q Fig. 2, p.3; §§2.3-2.4, p.5; §4.1, p.6). Neither fully specifies the remaining boundaries.</p>
+
+<figure class="fig" id="fig-events">
+<img src="assets/img/fig-events.png" alt="Four lane diagrams: hesitation pause, backchannel, genuine interruption, completed question, each showing user audio, assistant audio, floor ownership and desired controller action.">
+<figcaption><b>Figure 2.</b> Conversational events and desired actions. Four lanes per panel: user audio, assistant audible audio, desired floor ownership, desired controller action. Time is symbolic. These are desired behaviors for a test, not measured traces.</figcaption>
+</figure>
+
+<div class="callout note"><span class="title">A subtle eligibility rule</span>
+A hesitation while the assistant has no active or pending output tests <em>premature response onset</em>. It cannot count as a false yield (there was nothing to yield), so it is reported separately.</div>
+
+<h2 id="evidence">Detailed evidence</h2>
+<details><summary>Moshi: numbers and training stages</summary>
+<ul>
+<li>Mimi encoder: four conv blocks with strides (4, 5, 6, 8) and a final stride-2 convolution; 24 kHz mono to 512-d at 12.5 frames/s. Transformer modules before and after quantization each have 8 layers and 8 heads, causal. (M §3.3.1, p.10)</li>
+<li>8 codebooks x 2,048 entries = 1.1 kbps at 12.5 Hz. Split quantization: 1 semantic VQ + 7-level acoustic RVQ. (M §3.3.1-3.3.2, pp.11-12)</li>
+<li>WavLM teacher: 1,024-d at 50 Hz, pooled to 12.5 Hz; cosine distillation. (M §3.3.2, p.12)</li>
+<li>Joint sequence has K = 2Q + 1 streams with Q = 8; actual user audio replaces predicted user-stream tokens during interaction. (M §3.4.4, p.17)</li>
+<li>Acoustic delay 2 in pretraining, 1 in fine-tuning. (M §5.3, p.27). Separate ASR/TTS configurations use a 2 s text/audio delay and differ from the conversational configuration. (M §5.7, pp.31-32)</li>
+<li>Stages: Helium text pretraining, single-stream audio pretraining, simulated multi-stream post-training, Fisher fine-tuning, synthetic instruction fine-tuning. Helium: 2.1T text tokens (CommonCrawl, Wikipedia family, StackExchange, peS2o). Audio pretraining: 7M hours transcribed with Whisper-large-v3. (M §§1, 4.1-4.4)</li>
+</ul></details>
+<details><summary>Qwen2.5-Omni: numbers and training stages</summary>
+<ul>
+<li>Audio resampled to 16 kHz; 128-channel mel; 25 ms window, 10 ms hop; about 40 ms per representation. (Q §2.2, p.4)</li>
+<li>Qwen2-Audio encoder initialized from Whisper-large-v3; adapters trained before encoders against an initially frozen LLM. (Q §2.2, p.4; §3, p.6)</li>
+<li>Input attention uses 2 s blocks; audio-video time interleaving separately uses 2 s groups. (Q §2.2, §2.4)</li>
+<li>Output path: speech codes, flow-matching DiT (4 blocks: 2 lookback, 1 lookahead), mel, modified BigVGAN, waveform. (Q §2.4, p.5)</li>
+<li>Pretraining: freeze LLM, unfreeze all, extend context 8,192 to 32,768. Second phase adds 800B image/video, 300B audio and 100B video-audio tokens. Talker: continuation next-token prediction, DPO ranked by WER and punctuation-pause error, multi-speaker tuning. (Q §3-4.3, pp.6-7)</li>
+</ul></details>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

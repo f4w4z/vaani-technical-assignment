@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Limitations | Report</title>
+<meta name="description" content="What this project does not establish: synthetic data, small models, unmatched conditions, lexical metrics, and an unrun proposal.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem('docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+</head>
+<body data-page="limitations">
+<main id="content">
+
+<div class="eyebrow">Reference</div>
+<h1>Limitations</h1>
+<p class="lead">What these results and analyses do not show. Each item says how much it matters and what would fix it.</p>
+
+<h2 id="part1">Part I: analysis and proposal</h2>
+<table>
+<thead><tr><th>Limitation</th><th>Weight</th><th>What would address it</th></tr></thead>
+<tbody>
+<tr><td><strong>No experiment was run.</strong> The yielding-controller hypothesis is specified but untested; no gain, dataset size, parameter count or runtime is claimed.</td><td><span class="badge bad">Fundamental</span></td><td>Implement the controller, collect and annotate the data, run the constrained comparison on the <a href="proposal.html">proposal page</a>.</td></tr>
+<tr><td><strong>Statements about the models rest on two reports.</strong> Later releases or code may differ, and reports omit many quantities (see <a href="task1.html#unreported">what is unspecified</a>).</td><td><span class="badge warn">Moderate</span></td><td>Check against released code and checkpoints.</td></tr>
+<tr><td><strong>The three limitations are ranked by judgment</strong>, not measured.</td><td><span class="badge warn">Moderate</span></td><td>Component-level timing and event-level evaluation of the real systems.</td></tr>
+<tr><td><strong>Implementation access is unverified:</strong> whether Moshi's temporal context and PAD probabilities are exposed; what suppressing audio does to its internal state; Fisher licensing.</td><td><span class="badge warn">Moderate</span></td><td>Read the implementation; check licenses.</td></tr>
+<tr><td><strong>Novelty is unchecked.</strong> Turn prediction already exists (TurnGPT, Voice Activity Projection). Whether a speech generator's hidden state has been used for action selection is not searched.</td><td><span class="badge note">Scope</span></td><td>A wider literature search. No priority claim is made.</td></tr>
+</tbody>
+</table>
+
+<h2 id="part2">Part II: the Telugu pipeline</h2>
+<table>
+<thead><tr><th>Limitation</th><th>Weight</th><th>What would address it</th></tr></thead>
+<tbody>
+<tr><td><strong>Synthetic speech only.</strong> All audio is TTS output. Nothing here speaks to accents, prosody, disfluency, speaking rate or microphone channels.</td><td><span class="badge bad">Fundamental</span></td><td>Evaluate on real recorded Telugu (an exported FLEURS or IndicVoices subset can be fed through <code>prepare_data.py</code> as a manifest).</td></tr>
+<tr><td><strong>Small models, by memory necessity.</strong> A larger ASR/LLM pair would likely change both WER and, above all, factual accuracy. The 0/129 result is specific to Qwen2.5-1.5B.</td><td><span class="badge bad">Fundamental</span></td><td>A GPU with room for Qwen2.5-7B-Instruct (or quantization) and Whisper-large-v3.</td></tr>
+<tr><td><strong>Templated questions.</strong> Only capitals and additions, short utterances, one fact each.</td><td><span class="badge warn">Moderate</span></td><td>Open-ended or multi-turn questions with a human judge or semantic scorer.</td></tr>
+<tr><td><strong>Clean and noisy are not matched recordings.</strong> TTS duration prediction was not seeded, so the clean-vs-noisy gap includes rendering variance. The baseline-vs-denoised comparison is matched.</td><td><span class="badge warn">Moderate</span></td><td>Seed TTS once, save the clean waveforms, add noise to those exact files.</td></tr>
+<tr><td><strong>Quality is a lexical proxy.</strong> Word-overlap F1 does not understand paraphrase or inflection. The hallucination test is a substring heuristic, so its rate is an upper bound.</td><td><span class="badge warn">Moderate</span></td><td>A semantic or human-judged correctness score. <code>evaluate.py</code> accepts a custom scorer.</td></tr>
+<tr><td><strong>One deterministic run per condition.</strong> Intervals reflect question sampling only, not run-to-run, speaker or recording variance.</td><td><span class="badge warn">Moderate</span></td><td>More question sets, speakers and TTS voices.</td></tr>
+<tr><td><strong>The noise level was chosen to create a bottleneck.</strong> 0 dB white Gaussian noise is harsher and simpler than most real conditions, and 8 dB showed no effect.</td><td><span class="badge note">Disclosed</span></td><td>Realistic noise types (babble, reverberation, codec artifacts) at realistic SNRs.</td></tr>
+<tr><td><strong>The denoiser was tried at two settings.</strong> A negative result for this algorithm at these parameters is not a statement about denoising in general (learned enhancement models were not tried).</td><td><span class="badge note">Scope</span></td><td>A neural speech-enhancement front end; or fine-tuning the recognizer on noisy speech.</td></tr>
+<tr><td><strong>The ASR checkpoint is unpinned.</strong> <code>vasista22/whisper-telugu-small</code> resolved to two different commits for config and weights during the session, so pinning one broke loading. A future upstream change could shift results.</td><td><span class="badge warn">Reproducibility</span></td><td>Pin a consistent commit once the upstream repository stabilizes, or vendor the weights locally.</td></tr>
+<tr><td><strong>Latency is hardware-specific.</strong> RTF depends on this laptop GPU, the 256-token cap and greedy decoding. It is not streaming first-audio latency.</td><td><span class="badge note">Scope</span></td><td>Report on target hardware; add a streaming first-token measurement.</td></tr>
+</tbody>
+</table>
+
+<h2 id="claims">What can and cannot be claimed</h2>
+<div class="cards">
+  <div class="card"><h4><span class="badge good">Supported</span></h4><p>The pipeline runs end to end. WER is 0.293 clean. Noise raises WER by a real, interval-backed amount. Denoising does not measurably change it. From speech, the 1.5B LLM never gave the right fact.</p></div>
+  <div class="card"><h4><span class="badge warn">Suggestive</span></h4><p>Aggressive spectral subtraction is worse than none (25-question slice only). The LLM, not ASR, is the main lever for quality.</p></div>
+  <div class="card"><h4><span class="badge bad">Not shown</span></h4><p>That the yielding controller works. That results hold on real speech, other languages, bigger models, or other noise. That cascades are slower than end-to-end systems.</p></div>
+</div>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

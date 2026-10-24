@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Overview | Report</title>
+<meta name="description" content="Report on speech language-model architectures (Moshi and Qwen2.5-Omni) and a reproducible Telugu speech pipeline with its own evaluation.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem('docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+</head>
+<body data-page="index">
+<main id="content">
+
+<h1>Speech AI Report</h1>
+<p class="lead">An architectural analysis of two speech LLMs, a proposal for conversational floor control, and a reproducible Telugu speech-to-text-response pipeline with its own evaluation code, results and limitations.</p>
+
+<p>Author: Banuru Mohammed Fawaz. These pages document everything in the repository: the analysis, the code, the data, the metrics, the results and the decisions behind them.</p>
+
+<h2 id="headline">Headline results</h2>
+<p>All Part II numbers are measured on 129 synthesized Telugu utterances per condition, with 0 failed samples in every run. Part I contains no experiments.</p>
+
+<div class="cards">
+  <div class="card stat"><div class="v">0.293</div><div class="l">Corpus WER, clean</div><div class="d">CER 0.075</div></div>
+  <div class="card stat"><div class="v">0.338</div><div class="l">Corpus WER, noisy (0 dB SNR)</div><div class="d">+0.045, 95% CI +0.014 to +0.077</div></div>
+  <div class="card stat"><div class="v">+0.001</div><div class="l">WER change from denoising</div><div class="d">95% CI -0.014 to +0.017, no effect</div></div>
+  <div class="card stat"><div class="v">0 / 129</div><div class="l">Correct answers from speech</div><div class="d">3 / 129 from perfect transcripts</div></div>
+  <div class="card stat"><div class="v">0</div><div class="l">Abstentions in 774 answers</div><div class="d">The LLM never says "I don't know"</div></div>
+  <div class="card stat"><div class="v">4.15</div><div class="l">Pipeline real-time factor, clean</div><div class="d">ASR alone: 0.50. The LLM is about 88% of time.</div></div>
+</div>
+
+<div class="callout note"><span class="title">The one-line takeaway</span>
+The ASR stage is fine and real-time. The small 1.5B LLM is the dominant failure, and it fails confidently rather than abstaining. Noise measurably hurts ASR, and a classical denoiser does not fix it.</div>
+
+<h2 id="parts">The two parts</h2>
+<div class="cards">
+  <a class="card" href="task1.html"><h4>Part I: Architecture analysis</h4><p>Moshi vs. Qwen2.5-Omni along seven axes, three ranked limitations, and why "end of speech" is really four decisions.</p></a>
+  <a class="card" href="proposal.html"><h4>Part I: Yielding proposal</h4><p>A falsifiable experiment: a small controller on frozen Moshi that uses generation state to continue, hold or yield. Specified, not run.</p></a>
+  <a class="card" href="pipeline.html"><h4>Part II: Pipeline</h4><p>Telugu speech to ASR to LLM to text response, the full config reference, and how timing is measured.</p></a>
+  <a class="card" href="results.html"><h4>Part II: Results</h4><p>Clean vs. noisy tables, latency distributions, hallucination rate, confidence intervals and all six plots.</p></a>
+</div>
+
+<div class="callout warn"><span class="title">Keep the two parts separate</span>
+Part II measures a <em>cascade</em>, which has no floor-control decision to evaluate. It does not test Part I's hypothesis, and these docs never present it as if it did.</div>
+
+<h2 id="deliverables">Deliverables</h2>
+<table>
+<thead><tr><th>File</th><th>What it is</th></tr></thead>
+<tbody>
+<tr><td><a href="assets/pdf/report.pdf">report.pdf</a></td><td>The single ACL-style paper combining both parts (11 pages).</td></tr>
+<tr><td><a href="assets/pdf/task1.pdf">task1.pdf</a></td><td>Longer standalone Task 1 write-up (13 pages) with the three diagrams.</td></tr>
+<tr><td><a href="assets/pdf/task2.pdf">task2.pdf</a></td><td>Longer standalone Task 2 write-up (7 pages) with all plots.</td></tr>
+<tr><td><a href="https://github.com/f4w4z/vaani-technical-assignment" target="_blank" rel="noopener">GitHub repository</a></td><td>All code, configs, tests and reports.</td></tr>
+</tbody>
+</table>
+
+<h2 id="map">Where to find things</h2>
+<table>
+<thead><tr><th>I want to...</th><th>Go to</th></tr></thead>
+<tbody>
+<tr><td>Run it</td><td><a href="quickstart.html">Quickstart</a></td></tr>
+<tr><td>See how each requirement is met</td><td><a href="requirements.html">Requirements</a></td></tr>
+<tr><td>Understand a config key</td><td><a href="pipeline.html#config">Config reference</a></td></tr>
+<tr><td>Know how a metric is defined</td><td><a href="metrics.html">Metrics and evaluation</a></td></tr>
+<tr><td>Look up a function or CLI flag</td><td><a href="modules.html">Modules and CLI</a></td></tr>
+<tr><td>Learn why a decision was made</td><td><a href="decisions.html">Decision log</a></td></tr>
+<tr><td>See what could be wrong or missing</td><td><a href="limitations.html">Limitations</a></td></tr>
+<tr><td>Find a file</td><td><a href="files.html">Repository map</a></td></tr>
+</tbody>
+</table>
+
+<p>Press <kbd>/</kbd> or <kbd>Ctrl</kbd>+<kbd>K</kbd> anywhere to search every page.</p>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

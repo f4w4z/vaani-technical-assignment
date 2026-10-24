@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pipeline and config | Report</title>
+<meta name="description" content="The Telugu speech pipeline architecture, every config.yaml key, model choices and the output schema.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem('docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+</head>
+<body data-page="pipeline">
+<main id="content">
+
+<div class="eyebrow">Part II: Pipeline</div>
+<h1>Pipeline and configuration</h1>
+<p class="lead">A cascaded system: Telugu speech in, a Telugu text answer out, with a Whisper-family recognizer feeding an instruction-tuned LLM. Both models stay loaded and are reused across a whole evaluation.</p>
+
+<h2 id="architecture">Architecture</h2>
+<div class="flow">
+  <div class="node">Speech input<small>WAV / FLAC</small></div><span class="arrow">&rarr;</span>
+  <div class="node opt">Denoise<small>optional, asr.denoise</small></div><span class="arrow">&rarr;</span>
+  <div class="node">ASR<small>vasista22/whisper-telugu-small</small></div><span class="arrow">&rarr;</span>
+  <div class="node">LLM<small>Qwen2.5-1.5B-Instruct</small></div><span class="arrow">&rarr;</span>
+  <div class="node">Telugu text response</div>
+</div>
+<table>
+<thead><tr><th>File</th><th>Role</th></tr></thead>
+<tbody>
+<tr><td><code>config.yaml</code></td><td>Models, revisions, device, precision, decoding, paths.</td></tr>
+<tr><td><code>asr.py</code></td><td><code>ASRWrapper</code>: decodes audio with soundfile, averages to mono, optionally denoises, resamples to the model's rate, transcribes with a Hugging Face ASR pipeline. Timing is synchronized.</td></tr>
+<tr><td><code>llm.py</code></td><td><code>LLMWrapper</code>: applies the chat template (system + user), generates, returns only the newly generated text. Stateless: no history is kept between calls.</td></tr>
+<tr><td><code>pipeline.py</code></td><td><code>SpeechPipeline</code> composes the two, rejects an empty transcript before calling the LLM, and exposes the JSON CLI.</td></tr>
+<tr><td><code>denoise.py</code></td><td>Spectral subtraction used by the ASR stage when enabled. See <a href="extension.html">Denoising extension</a>.</td></tr>
+</tbody>
+</table>
+
+<h3 id="timing">What is timed</h3>
+<ul>
+<li><code>asr_seconds</code>: audio decoding, mono mix, optional denoising, resampling and transcription. Excludes model loading.</li>
+<li><code>llm_seconds</code>: prompt tokenization, generation and decoding. Excludes model loading.</li>
+<li><code>total_seconds</code>: wall clock around both stages, so it can exceed their sum slightly (pipeline overhead).</li>
+<li>CUDA work is synchronized before each clock read. The first inference may include kernel initialization; the evaluator therefore runs <code>--warmup 1</code> by default in the documented commands.</li>
+</ul>
+
+<h2 id="models">Model choices</h2>
+<table>
+<thead><tr><th>Stage</th><th>Used</th><th>Original default</th><th>Why changed</th></tr></thead>
+<tbody>
+<tr><td>ASR</td><td><code>vasista22/whisper-telugu-small</code></td><td><code>openai/whisper-large-v3</code></td><td>Large-v3 plus a 7B LLM do not fit in about 6.5 GB free VRAM. The general <code>openai/whisper-small</code> was tried and rejected: see below.</td></tr>
+<tr><td>LLM</td><td><code>Qwen/Qwen2.5-1.5B-Instruct</code></td><td><code>Qwen/Qwen2.5-7B-Instruct</code></td><td>Memory (about 3 GB fp16 vs. about 15 GB).</td></tr>
+</tbody>
+</table>
+<div class="callout bad"><span class="title">Why not the general whisper-small</span>
+Even with Telugu forced, <code>openai/whisper-small</code> transcribed this corpus's Telugu audio into Devanagari-looking text and looped on short clips. The first full clean run under it scored corpus WER 2.56 and CER 2.69, and was discarded. The Telugu-only fine-tune fixed it (WER 0.293). Full story in the <a href="decisions.html">decision log</a>.</div>
+<div class="callout warn"><span class="title">Why <code>language: null</code></span>
+The Telugu fine-tune ships a <code>generation_config.json</code> that predates transformers' <code>language</code>/<code>task</code> validation. Passing either to <code>generate()</code> raises <code>ValueError: The generation config is outdated...</code>, even for valid values (reproduced on transformers 5.15.0 and 4.57.6). <code>ASRWrapper</code> therefore treats a falsy <code>language</code> as "pass neither <code>language</code> nor <code>task</code>". Because the checkpoint is Telugu-only, nothing is lost. For a general multilingual Whisper checkpoint, set <code>language: telugu</code> and <code>task</code> defaults to <code>transcribe</code>.</div>
+
+<h2 id="config">Config reference: <code>config.yaml</code></h2>
+<p>Relative filesystem paths resolve from the YAML file's directory. CLI path overrides resolve from the current directory.</p>
+<h3 id="cfg-paths"><code>paths</code></h3>
+<table>
+<thead><tr><th>Key</th><th>Default</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>paths.audio</code></td><td><code>data/sample_te.wav</code></td><td>Default input for <code>pipeline.py</code> when <code>--audio</code> is not given. No file is bundled.</td></tr>
+<tr><td><code>paths.output</code></td><td><code>outputs/result.json</code></td><td>Where the pipeline's JSON result is saved (UTF-8, Telugu preserved).</td></tr>
+<tr><td><code>paths.cache_dir</code></td><td><code>.cache/huggingface</code></td><td>Hugging Face model cache.</td></tr>
+</tbody>
+</table>
+<h3 id="cfg-runtime"><code>runtime</code></h3>
+<table>
+<thead><tr><th>Key</th><th>Default</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>runtime.device</code></td><td><code>auto</code></td><td><code>auto</code>, <code>cpu</code>, <code>cuda</code>, <code>cuda:N</code> or <code>mps</code>. <code>auto</code> prefers CUDA, then MPS, then CPU. Errors if a requested accelerator is unavailable.</td></tr>
+<tr><td><code>runtime.dtype</code></td><td><code>auto</code></td><td><code>float32</code>, <code>float16</code> or <code>bfloat16</code>. <code>auto</code> is float16 on CUDA, float32 elsewhere. float16 on CPU is rejected.</td></tr>
+</tbody>
+</table>
+<h3 id="cfg-asr"><code>asr</code></h3>
+<table>
+<thead><tr><th>Key</th><th>Value used</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>asr.model_name</code></td><td><code>vasista22/whisper-telugu-small</code></td><td>Any Transformers-compatible Whisper (or IndicWhisper) checkpoint or local directory. Non-Whisper architectures are rejected.</td></tr>
+<tr><td><code>asr.revision</code></td><td><code>main</code></td><td>Model commit. Left unpinned for this checkpoint; see <a href="limitations.html">Limitations</a>.</td></tr>
+<tr><td><code>asr.language</code></td><td><code>null</code></td><td>See the warning above. A value like <code>telugu</code> forces the language and sets <code>task</code>.</td></tr>
+<tr><td><code>asr.chunk_length_s</code></td><td><code>30</code></td><td>Chunking window for the ASR pipeline. Must be positive.</td></tr>
+<tr><td><code>asr.batch_size</code></td><td><code>1</code></td><td>Must be at least 1. The wrapper handles one request at a time.</td></tr>
+<tr><td><code>asr.denoise</code></td><td><code>false</code></td><td>Spectral-subtraction front end. <code>true</code> only in <code>config_denoised.yaml</code>.</td></tr>
+<tr><td><code>asr.generation.max_new_tokens</code></td><td><code>256</code></td><td>Decoder cap. (Transformers also warns that <code>max_length</code> is set; <code>max_new_tokens</code> wins.)</td></tr>
+<tr><td><code>asr.generation.num_beams</code></td><td><code>1</code></td><td>Greedy. Must be a positive integer.</td></tr>
+<tr><td><code>asr.generation.do_sample</code></td><td><code>false</code></td><td>Must be false for paired evaluation; <code>evaluate.py</code> enforces it for the LLM and <code>verify_task2.py</code> for both.</td></tr>
+</tbody>
+</table>
+<h3 id="cfg-llm"><code>llm</code></h3>
+<table>
+<thead><tr><th>Key</th><th>Value used</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>llm.model_name</code></td><td><code>Qwen/Qwen2.5-1.5B-Instruct</code></td><td>A causal instruction model with a chat template supporting system and user roles. Base models need their own prompt adapter.</td></tr>
+<tr><td><code>llm.revision</code></td><td><code>989aa7980e4cf806f80c7fef2b1adb7bc71aa306</code></td><td>Pinned commit.</td></tr>
+<tr><td><code>llm.system_prompt</code></td><td>"You are a helpful assistant. Answer the user's question clearly and concisely in Telugu using Telugu script. If the request is unclear, ask for clarification. Do not invent facts."</td><td>The prompt the hallucination test measures against: it explicitly allows abstaining.</td></tr>
+<tr><td><code>llm.max_input_tokens</code></td><td><code>2048</code></td><td>Longer prompts raise an error rather than being silently truncated.</td></tr>
+<tr><td><code>llm.generation.max_new_tokens</code></td><td><code>256</code></td><td>Response budget. Prompt plus budget must fit the model's context.</td></tr>
+<tr><td><code>llm.generation.do_sample</code></td><td><code>false</code></td><td>Greedy, for a repeatable baseline.</td></tr>
+<tr><td><code>llm.generation.temperature</code>, <code>top_p</code>, <code>repetition_penalty</code></td><td><code>0.7</code>, <code>0.9</code>, <code>1.05</code></td><td>Used only when sampling. When <code>do_sample</code> is false, temperature and top_p are dropped before generation.</td></tr>
+</tbody>
+</table>
+
+<h3 id="two-configs">The two config files</h3>
+<p><code>config_denoised.yaml</code> is identical to <code>config.yaml</code> except for <code>asr.denoise: true</code> (and slightly shorter comments, with <code>asr.revision: main</code> noted as unpinned). It exists so the baseline-vs-improved ablation differs in exactly one setting.</p>
+
+<h2 id="output">Output schema</h2>
+<p><code>pipeline.py</code> prints and saves one JSON object (<code>PipelineResult</code>):</p>
+<table>
+<thead><tr><th>Field</th><th>Type</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>audio_path</code></td><td>string</td><td>Resolved path of the input file.</td></tr>
+<tr><td><code>transcript</code></td><td>string</td><td>ASR output.</td></tr>
+<tr><td><code>response</code></td><td>string</td><td>LLM answer to the transcript.</td></tr>
+<tr><td><code>asr_seconds</code></td><td>float</td><td>See <a href="#timing">what is timed</a>.</td></tr>
+<tr><td><code>llm_seconds</code></td><td>float</td><td></td></tr>
+<tr><td><code>total_seconds</code></td><td>float</td><td></td></tr>
+</tbody>
+</table>
+<p>These records are evaluation inputs, not scores. WER and response quality need reference labels, which is what <a href="metrics.html">the evaluator</a> adds.</p>
+
+<h3 id="guards">Built-in guards</h3>
+<ul>
+<li>An empty ASR transcript raises an error and the LLM is not called.</li>
+<li>Audio must be finite and non-empty. Stereo is averaged to mono. Audio is resampled to the model's actual rate (<code>scipy.signal.resample_poly</code>), not just relabeled.</li>
+<li>Over-long prompts and prompt-plus-budget overflow raise errors rather than truncating Telugu text or dropping chat-control tokens.</li>
+<li>Each pipeline instance is intended for sequential use.</li>
+</ul>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

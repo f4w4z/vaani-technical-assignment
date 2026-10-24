@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Yielding-controller proposal | Report</title>
+<meta name="description" content="A falsifiable, fully specified experiment: a small controller on frozen Moshi that uses its own generation state to continue, hold or yield. Specified, not run.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem('docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+</head>
+<body data-page="proposal">
+<main id="content">
+
+<div class="eyebrow">Part I: Analysis</div>
+<h1>Proposal: generation-state-aware yielding</h1>
+<p class="lead">The proposed improvement: a small causal controller on frozen Moshi that reads the model's own generation state to decide continue, hold or yield, specified as an experiment that could fail.</p>
+
+<div class="callout bad"><span class="title">Status: specified, not run</span>
+No result is claimed. There is no controller implementation, no collected data and no measurement behind this page. It is a research design, and its value is in being fully specified and refutable.</div>
+
+<h2 id="problem">The failure it targets</h2>
+<p>A speech-activity rule ("stop when the user starts making sound") can treat a listener's "mm-hm" as an attempt to take the floor. That is a <em>hypothesized</em> baseline failure, not an established failure of either paper's model. The proposal asks whether the speech LLM's own internal state tells the two cases apart better than audio and playback cues alone.</p>
+
+<h2 id="hypothesis">Hypothesis and refutation</h2>
+<blockquote class="callout note"><span class="title">Hypothesis</span>
+A frozen speech LLM's own generation state improves continue/hold/yield decisions beyond incoming audio and observable playback history. It predicts fewer false yields on eligible backchannel and hesitation events than speech-activity rules and an audio-only learned controller, under matched interruption-to-yield latency and missed-interruption constraints.</blockquote>
+<p><strong>Refuted if</strong> the state-aware controller cannot improve that constrained comparison on held-out speakers and conversations, <strong>or</strong> if removing generation state preserves the benefit.</p>
+<p>Four secondary alternatives remain open: whether buffering dominates onset latency, whether codec phonetic quality predicts interaction accuracy, whether limited lookahead causes prosodic commitment errors, and whether real overlapping dialogue contributes beyond synthetic conversation training.</p>
+
+<h2 id="controller">The controller</h2>
+<p>Attach a small causal controller to <strong>frozen</strong> Moshi. The base model's parameters never change.</p>
+<h3 id="inputs">Inputs (decision-time only)</h3>
+<ul>
+<li>Current Mimi representations and causal speech-activity features.</li>
+<li>Observable assistant playback activity, elapsed activity and silence durations, queue occupancy.</li>
+<li><strong>Generation-state additions:</strong> Moshi's Temporal Transformer context vector and the self-text PAD probability (M §3.4.1, pp.13-14; §3.4.4, pp.16-17).</li>
+</ul>
+<p>Only values available at decision time may enter. Future audio or future generated text must never be a feature (it may inform <em>labels</em> only).</p>
+<h3 id="actions">Actions</h3>
+<table>
+<thead><tr><th>Action</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td><strong>continue</strong></td><td>Release available audio.</td></tr>
+<tr><td><strong>hold</strong></td><td>Briefly suspend release while listening continues. Duration is capped on development data; excessive holding counts as disruption, not as a successful non-yield.</td></tr>
+<tr><td><strong>yield</strong></td><td>Suppress output and clear pending playback while listening continues. Playback resumes only through a later controller decision.</td></tr>
+</tbody>
+</table>
+<p>All actions go through one bounded playback actuator. A learned projection plus a recurrent classifier produces the action. The actuator controls the queue-to-speaker path only; it must never interrupt the incoming-audio path.</p>
+<p>The contribution under test is the <em>use of generation state</em>, not turn-taking prediction itself.</p>
+
+<h2 id="data">Training and labeled data</h2>
+<ul>
+<li>Train <strong>only</strong> the projection and classifier, with supervised action cross-entropy.</li>
+<li>Labels: event type, floor ownership, event onset, acceptable action intervals, interruption-response deadlines. Annotators hear the surrounding dialogue and mark ambiguity independently of controller output.</li>
+<li>Data: consented human-Moshi conversations plus controlled reenactments, recorded as separate user and actually-played-assistant channels, then replayed through frozen Moshi for causal feature traces. Fisher's separate channels are a possible auxiliary source for human conversational cues (M §4.2, p.18); new action annotations and human-system validation are still required.</li>
+<li>Split by speaker, conversation and scenario. Keep disagreement scores for sensitivity analysis. Choose class weights, thresholds and hold limits on development data only; leave the test set untouched.</li>
+<li>Include logged policy rollouts, not only reenactments, so training sees the controller's own action histories.</li>
+</ul>
+
+<h2 id="design">Experimental design</h2>
+<table>
+<thead><tr><th>Condition</th><th>Audio cues</th><th>Playback history</th><th>Moshi generation state</th><th>Thresholds</th></tr></thead>
+<tbody>
+<tr><td>Unmodified Moshi</td><td>Native</td><td>Native</td><td>Native</td><td>No added controller</td></tr>
+<tr><td>Fixed speech-activity rule</td><td>Yes</td><td>Same actuator</td><td>No</td><td>Prespecified</td></tr>
+<tr><td>Tuned speech-activity rule</td><td>Yes</td><td>Same actuator</td><td>No</td><td>Development set</td></tr>
+<tr><td>Audio-only learned controller</td><td>Yes</td><td>Yes</td><td>No</td><td>Development set</td></tr>
+<tr><td>State-aware learned controller</td><td>Yes</td><td>Yes</td><td><strong>Yes</strong></td><td>Development set</td></tr>
+</tbody>
+</table>
+<p>Winning only against the fixed rule would not show a generation-state benefit; the tuned rule and the audio-only learned controller exist to rule out calibration and "any learned classifier helps" explanations.</p>
+
+<figure class="fig" id="fig-matrix">
+<img src="assets/img/fig-matrix.png" alt="Experimental design matrix with three event icons, the five conditions, and a decision gate on latency and missed-interruption limits.">
+<figcaption><b>Figure 3.</b> Experimental design matrix. No empirical curve is implied; all rows are proposed conditions, not measured results.</figcaption>
+</figure>
+
+<h2 id="metric">Primary metric and constraints</h2>
+<p>Events are matched <strong>backchannel, hesitation-pause and genuine-interruption</strong> scenarios, balanced across speakers and recording conditions. Floor intent is inferred from context, not from event duration alone. Completed questions are an endpoint sanity check outside the primary comparison.</p>
+<pre><code>false-yield rate = (events with an inappropriate yield or excessive hold)
+                   / (eligible floor-retention events)
+
+primary metric   = unweighted mean of the backchannel and hesitation false-yield rates
+                   (both also reported separately, with denominators)
+
+missed-interruption rate = (genuine interruptions without timely playback cessation)
+                           / (genuine interruptions)</code></pre>
+<ul>
+<li><strong>Interruption-to-yield latency:</strong> from annotated interruption onset to actual playback cessation, including queued audio and actuator delay. Failure to yield within the annotated deadline is a miss. Report latency distributions together with misses, never successful responses alone.</li>
+<li><strong>Common limits:</strong> operating points are compared only under shared limits on latency and missed-interruption rate, set from development-set baseline behavior <em>before</em> testing. If no operating point meets both, the benefit is unsupported.</li>
+<li><strong>Uncertainty:</strong> estimated by resampling conversations, preserving within-dialogue dependence.</li>
+<li><strong>Also published:</strong> eligibility denominators, premature starts during user-owned hesitation, and unnecessary hold time.</li>
+</ul>
+
+<h2 id="ablation">Ablation, robustness and controls</h2>
+<ul>
+<li><strong>Diagnostic ablation:</strong> remove generation-state features but keep acoustic features, playback history, queue state, classifier capacity and training budget. If the benefit survives, the proposed contribution is rejected even if the controller still beats the rule. Report any parameter-count difference from the input projection.</li>
+<li><strong>Robustness:</strong> repeat held-out events under identical noise and echo perturbations. Report activity-detection errors and controller errors separately.</li>
+<li><strong>Indic transfer:</strong> a Hindi/Telugu subset with fluent annotators and per-language agreement. Evaluate zero-shot transfer before any adaptation and report the two separately. Do not assume either base model fails on Indic speech, and report basic instruction comprehension so lexical misunderstanding is not blamed on yielding.</li>
+<li><strong>Held fixed:</strong> checkpoint, generation settings, hardware, recordings, playback mechanism, annotation protocol.</li>
+</ul>
+
+<h2 id="replay">Replay vs. interactive evaluation</h2>
+<p>For immediate-action comparisons, start every system from a common assistant prefix and replay the same user event, so differences are not blamed on different user recordings. Replay cannot reproduce how people react to different assistant actions, so follow-up live trials with counterbalanced order must assess resumption coherence and dialogue drift. The two kinds of outcome are reported separately and never merged into one causal claim.</p>
+
+<h2 id="threats">Threats to validity</h2>
+<table>
+<thead><tr><th>Threat</th><th>Mitigation in the design</th></tr></thead>
+<tbody>
+<tr><td>Generation state encodes only timing or speaker identity</td><td>Playback history and durations supplied to both learned variants; speaker-disjoint splits</td></tr>
+<tr><td>Threshold tuning explains the gain</td><td>The development-tuned rule baseline</td></tr>
+<tr><td>Extra waiting, not better decisions, lowers false yields</td><td>Common latency limits and explicit hold accounting</td></tr>
+<tr><td>Scripted cues explain the performance</td><td>Natural held-out conversations</td></tr>
+<tr><td>Dialogue drift: Moshi can internally generate speech that suppression stops the user hearing</td><td>Freezing the model does not repair its internal dialogue state. Track unheard output, resumption coherence, truncation and controller overhead as follow-up outcomes. Failure there limits deployment even with a good primary metric.</td></tr>
+</tbody>
+</table>
+
+<h2 id="verify">Open items to verify before running</h2>
+<ul>
+<li>Whether an implementation exposes the causal Mimi representations, temporal context and PAD probabilities, and what Moshi's state does when generated audio is suppressed from playback.</li>
+<li>Fisher access and permitted use before selecting it as an auxiliary annotation source.</li>
+<li>Controller and feature-extraction overhead, and audible discontinuities after suppression and resumption. "Lightweight" is a design target until measured.</li>
+<li>Novelty: whether prior systems already use a speech generator's hidden state for conversational action selection. TurnGPT (text-based turn-taking prediction) and Voice Activity Projection (audio-based voice-activity prediction) show turn prediction predates this proposal. <strong>No priority claim is made.</strong></li>
+</ul>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

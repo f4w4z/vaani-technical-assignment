@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Decision log | Report</title>
+<meta name="description" content="Every significant problem hit while building the project, what was found, what was decided, and the effect on results.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem('docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+</head>
+<body data-page="decisions">
+<main id="content">
+
+<div class="eyebrow">Reference</div>
+<h1>Decision log</h1>
+<p class="lead">The problems met along the way, in order, with what was found and what was decided. Several of them changed the results, so they are part of the scientific record, not just engineering trivia.</p>
+
+<ol class="timeline">
+
+<li id="d1"><h4>1. Models had to shrink to fit the GPU</h4>
+<p><strong>Problem.</strong> The configured defaults (Whisper-large-v3 plus Qwen2.5-7B-Instruct) need roughly 3 GB + 15 GB in fp16 and both stay resident. The GPU is an 8 GB RTX 4060 Laptop with about 6.5 GB free.</p>
+<p><strong>Decision.</strong> Use a small ASR and <code>Qwen2.5-1.5B-Instruct</code> (about 3 GB). The README and <code>config.yaml</code> now say why.</p>
+<p><strong>Effect.</strong> Absolute quality is lower than a larger pair would give. The LLM's factual weakness is a direct consequence.</p></li>
+
+<li id="d2"><h4>2. General whisper-small wrote the wrong script</h4>
+<p><strong>Problem.</strong> The first full clean run (with <code>openai/whisper-small</code>, Telugu forced) finished 129/129 but with corpus WER 2.56 and CER 2.69. Sample inspection showed Telugu audio transcribed into Devanagari/Hindi-looking script (for example the question "What is Telangana's capital?" came back as phonetically similar Hindi script), and some clips looped on a repeated token.</p>
+<p><strong>Finding.</strong> A capability gap in the smallest general multilingual Whisper on a low-resource language, not a bug in the code.</p>
+<p><strong>Decision.</strong> Switch to <code>vasista22/whisper-telugu-small</code>, a Telugu-only fine-tune of the same size. Discard the first run's numbers.</p>
+<p><strong>Effect.</strong> Corpus WER fell from 2.56 to 0.293. A WER above 1 should always be inspected, not reported.</p></li>
+
+<li id="d3"><h4>3. The Telugu fine-tune rejects <code>language</code> and <code>task</code></h4>
+<p><strong>Problem.</strong> Loading the fine-tune and calling the pipeline raised <code>ValueError: The generation config is outdated and is thus not compatible with the language argument to generate</code>.</p>
+<p><strong>Investigation.</strong> Reproduced identically on transformers 5.15.0 and, after downgrading, 4.57.6, so it is a property of this checkpoint's <code>generation_config.json</code> (see transformers issue 25084), not of the library major version. A direct test without <code>language</code>/<code>task</code> transcribed correctly.</p>
+<p><strong>Decision.</strong> Make <code>language</code> optional in <code>ASRWrapper</code>: falsy means "pass neither". Set <code>asr.language: null</code>. Relax <code>verify_task2.py</code> to accept null only when the model name contains "telugu", and update its tests.</p></li>
+
+<li id="d4"><h4>4. The transformers version pin</h4>
+<p><strong>Problem.</strong> The environment had transformers 5.15.0; <code>requirements.txt</code> said <code>&lt;5</code>, and <code>verify_task2.py</code> flagged it.</p>
+<p><strong>Decision.</strong> The pin was first relaxed to <code>&lt;6</code>. After issue 3 the environment was downgraded to 4.57.6 to rule the version out; the final evaluations ran on 4.57.6 and the pin stays <code>&gt;=4.45,&lt;6</code>.</p>
+<p><strong>Side effect.</strong> Downgrading in a shared global Python environment conflicts with an unrelated installed package (<code>sentence-transformers</code> 6 requires transformers 5). It does not affect this project, but a virtual environment would have avoided it.</p></li>
+
+<li id="d5"><h4>5. 8 dB noise produced no bottleneck</h4>
+<p><strong>Problem.</strong> The noisy corpus at 8 dB SNR scored WER 0.2913 vs. 0.2928 clean: no degradation, so nothing for a denoiser to fix.</p>
+<p><strong>Decision.</strong> Regenerate the noisy corpus at 0 dB (<code>--skip-clean</code> was added so the validated clean corpus stayed untouched). WER rose to 0.3377.</p>
+<p><strong>Effect.</strong> A measurable bottleneck now exists. This choice is disclosed because it was made to create the bottleneck, not discovered.</p></li>
+
+<li id="d6"><h4>6. The denoiser did not help, so it was swept, then reported as is</h4>
+<p><strong>Problem.</strong> At default settings denoising left WER unchanged (+0.001).</p>
+<p><strong>Check.</strong> A quick 25-question, ASR-only sweep of mild vs. aggressive subtraction (aggressive was worse). A waveform check confirmed the filter works at signal level.</p>
+<p><strong>Decision.</strong> Stop tuning and report a negative result with intervals, rather than searching until something wins on a small set.</p></li>
+
+<li id="d7"><h4>7. Clean and noisy corpora are not matched recordings</h4>
+<p><strong>Problem.</strong> The TTS model's duration prediction is not seeded; re-synthesizing yields a different waveform for the same text. A waveform comparison revealed it (clean and noisy clips had different lengths).</p>
+<p><strong>Decision.</strong> Not redone, for time. Documented instead, and the extension's conclusion is anchored on the baseline-vs-denoised comparison, which <em>is</em> matched (same audio, one flag). The paired bootstrap shows the clean-vs-noisy gap is real regardless.</p></li>
+
+<li id="d8"><h4>8. Pinning model revisions partly failed</h4>
+<p><strong>Problem.</strong> Trying to pin <code>vasista22/whisper-telugu-small</code> to the hash in the cache broke loading: <code>OSError: ... does not appear to have a file named model.safetensors</code>. The cache held two snapshots for the same <code>main</code>: the tokenizer and config files under one commit, the weights under another.</p>
+<p><strong>Decision.</strong> Leave that one checkpoint at <code>main</code>, with a comment; pin Qwen (<code>989aa798...</code>), whose snapshot was consistent. This is listed under <a href="limitations.html">Limitations</a>.</p></li>
+
+<li id="d9"><h4>9. Hallucination rate was missing, then made precise</h4>
+<p><strong>Problem.</strong> The requirements name a hallucination rate; the first report had only word-overlap F1 and a qualitative note.</p>
+<p><strong>Decision.</strong> Add <code>hallucination.py</code>: a three-way classifier against the single fact in each reference answer. The first version scored every answer as hallucinated. Before trusting it, raw responses were inspected: they really did lack the fact, but 18 sum answers contained digits, so digit forms (whole-number matching) were added. Result: 0/129 correct from speech, 3/129 from human transcripts.</p></li>
+
+<li id="d10"><h4>10. Confidence intervals</h4>
+<p><strong>Problem.</strong> Calling a difference "within noise" without an interval is not defensible.</p>
+<p><strong>Decision.</strong> Add <code>bootstrap.py</code> (paired, by question). It confirmed the noise effect is real and the denoiser's is not.</p></li>
+
+<li id="d11"><h4>11. Report packaging</h4>
+<p>The Task 1 diagrams were first drawn in TikZ with two label overlaps that a first pass missed; they were found by zooming into the render and fixed by anchoring labels to node edges. The standalone reports were then merged into one ACL-style paper; wide figures had to be allowed on float pages or LaTeX stranded all of them at the end. Reports contain no Telugu script because plain <code>pdflatex</code> cannot render it; Telugu phrases appear in transliteration there, and in script on this site.</p></li>
+
+<li id="d12"><h4>12. Process conventions</h4>
+<p>Per <code>AGENTS.md</code>: commit each completed logical step with a concise Conventional Commits message, run appropriate checks first, and keep generated outputs, model caches, temporary dependencies and local reference documents out of version control. That is why <code>outputs/</code>, <code>data/</code>, <code>corpus_*</code>, <code>.cache/</code>, <code>tmp/</code> and the reference PDFs are git-ignored.</p></li>
+
+</ol>
+
+<h2 id="lessons">Lessons that generalize</h2>
+<ul>
+<li>A WER above 1 means something is wrong. Look at raw outputs before trusting aggregates.</li>
+<li>A flat result can mean "the experiment had no signal" (the 8 dB corpus) or "the fix doesn't work" (the denoiser). Check which before concluding.</li>
+<li>Separate what the LLM gets wrong from what the ASR gets wrong by scoring the same LLM on perfect transcripts.</li>
+<li>Report negative results with intervals. A tuned-away negative is worse than an honest one.</li>
+</ul>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

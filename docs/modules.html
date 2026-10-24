@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Modules and CLI | Report</title>
+<meta name="description" content="Reference for every Python module in the repository: purpose, public functions and classes, and command-line flags.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem('docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+</head>
+<body data-page="modules">
+<main id="content">
+
+<div class="eyebrow">Reference</div>
+<h1>Modules and CLI</h1>
+<p class="lead">Every Python file in the repository, what it exposes, and how to call it. All scripts are run from the repository root. About 1,990 lines of code in 11 modules, plus 8 test files.</p>
+
+<table>
+<thead><tr><th>Module</th><th>Lines</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td><a href="#asr"><code>asr.py</code></a></td><td>144</td><td>Whisper ASR wrapper with timing</td></tr>
+<tr><td><a href="#llm"><code>llm.py</code></a></td><td>96</td><td>Chat-LLM wrapper with timing</td></tr>
+<tr><td><a href="#pipeline-py"><code>pipeline.py</code></a></td><td>127</td><td>Composes ASR and LLM; JSON CLI; config loader</td></tr>
+<tr><td><a href="#denoise"><code>denoise.py</code></a></td><td>68</td><td>Spectral-subtraction front end</td></tr>
+<tr><td><a href="#evaluate"><code>evaluate.py</code></a></td><td>394</td><td>Metrics and the batch evaluation CLI</td></tr>
+<tr><td><a href="#prepare"><code>prepare_data.py</code></a></td><td>201</td><td>Builds evaluator manifests from folders or tables</td></tr>
+<tr><td><a href="#synth"><code>synthesize_corpus.py</code></a></td><td>140</td><td>TTS corpus generator (clean and noisy)</td></tr>
+<tr><td><a href="#plot"><code>plot_results.py</code></a></td><td>202</td><td>Headless plots from evaluation outputs</td></tr>
+<tr><td><a href="#halluc"><code>hallucination.py</code></a></td><td>121</td><td>Correct / abstained / hallucinated classifier</td></tr>
+<tr><td><a href="#boot"><code>bootstrap.py</code></a></td><td>87</td><td>Paired bootstrap intervals</td></tr>
+<tr><td><a href="#verify"><code>verify_task2.py</code></a></td><td>410</td><td>Setup checks and a mock end-to-end run</td></tr>
+</tbody>
+</table>
+
+<h2 id="asr"><code>asr.py</code></h2>
+<p>Whisper-compatible ASR with local audio decoding and synchronized timing. Inputs supported by libsndfile (WAV, FLAC) work without FFmpeg.</p>
+<h3>Functions</h3>
+<ul>
+<li><code>resolve_runtime(device, dtype) -&gt; (torch.device, torch.dtype)</code>: resolves <code>auto</code>, validates the accelerator and precision. Shared with <code>llm.py</code>.</li>
+<li><code>synchronize(device)</code>: waits for queued CUDA/MPS work before a clock read.</li>
+</ul>
+<h3>class <code>ASRWrapper</code></h3>
+<pre><code>ASRWrapper(model_name="openai/whisper-large-v3", *, device="auto", dtype="auto",
+           cache_dir=None, revision="main", language="telugu",
+           chunk_length_s=30, batch_size=1, generation=None, denoise=False)</code></pre>
+<ul>
+<li>Loads the processor and model, rejects non-Whisper architectures, builds a Hugging Face <code>automatic-speech-recognition</code> pipeline.</li>
+<li><code>language</code>: a language name forces it and defaults <code>task</code> to <code>transcribe</code>. <code>None</code> drops both from the generate kwargs (needed for the Telugu fine-tune).</li>
+<li><code>transcribe(audio_path) -&gt; (text, elapsed_seconds)</code>: reads audio, averages channels to mono, applies denoising if enabled, resamples to the model's rate, runs under <code>torch.inference_mode()</code>. Raises <code>FileNotFoundError</code> or <code>ValueError</code> (empty or non-finite audio).</li>
+</ul>
+
+<h2 id="llm"><code>llm.py</code></h2>
+<h3>class <code>LLMWrapper</code></h3>
+<pre><code>LLMWrapper(model_name="Qwen/Qwen2.5-7B-Instruct", *, device="auto", dtype="auto",
+           cache_dir=None, revision="main",
+           system_prompt="Answer clearly and concisely in Telugu script.",
+           max_input_tokens=2048, generation=None)</code></pre>
+<ul>
+<li>Requires a tokenizer with a chat template (system and user roles); otherwise raises.</li>
+<li><code>generate(prompt) -&gt; (response, elapsed_seconds)</code>: builds the chat messages, tokenizes, rejects prompts over <code>max_input_tokens</code> or overflowing the model context, generates, and decodes <em>only the newly generated tokens</em>. No history is retained.</li>
+<li>Sets <code>pad_token_id</code> from the pad or EOS token if missing. Drops <code>temperature</code> and <code>top_p</code> when <code>do_sample</code> is false.</li>
+</ul>
+
+<h2 id="pipeline-py"><code>pipeline.py</code></h2>
+<ul>
+<li><code>PipelineResult</code> (frozen dataclass): <code>audio_path, transcript, response, asr_seconds, llm_seconds, total_seconds</code>.</li>
+<li><code>SpeechPipeline(asr, llm)</code>: accepts any objects with the same methods (used for testing). <code>from_config(config)</code> loads both models. <code>run(audio_path)</code> runs both stages and raises on an empty transcript.</li>
+<li><code>load_config(path)</code>: safe YAML load, validates that sections are mappings, resolves <code>paths.audio / output / cache_dir</code> relative to the YAML's directory.</li>
+</ul>
+<pre><code>python pipeline.py [--config config.yaml] [--audio FILE] [--output FILE]</code></pre>
+<p><code>--audio</code> and <code>--output</code> override the config, resolved from the current directory. Prints the JSON and saves it. Exits with status 1 on failure.</p>
+
+<h2 id="denoise"><code>denoise.py</code></h2>
+<pre><code>spectral_subtract_denoise(audio, sample_rate, *, noise_percentile=10.0,
+                          oversubtraction=1.5, floor=0.05) -&gt; np.ndarray</code></pre>
+<p>Returns a denoised float32 copy of a 1-D mono waveform. Validates input and parameters. See <a href="extension.html#method">the extension page</a> for the algorithm.</p>
+
+<h2 id="evaluate"><code>evaluate.py</code></h2>
+<h3>Metric functions (standard library only)</h3>
+<table>
+<thead><tr><th>Name</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>normalize_text(text)</code></td><td>NFC and collapsed whitespace.</td></tr>
+<tr><td><code>levenshtein_distance(ref, hyp)</code></td><td>Unit-cost edit distance over any token sequences, two-row DP.</td></tr>
+<tr><td><code>ErrorRate(edits, reference_units)</code></td><td>Frozen dataclass; <code>.rate</code> is <code>None</code> for an empty reference.</td></tr>
+<tr><td><code>transcript_errors(ref, hyp)</code></td><td><code>{"wer": ErrorRate, "cer": ErrorRate}</code></td></tr>
+<tr><td><code>word_error_rate</code>, <code>character_error_rate</code></td><td>Convenience wrappers returning the float or <code>None</code>.</td></tr>
+<tr><td><code>response_token_f1(ref, hyp)</code></td><td>Multiset word-overlap F1.</td></tr>
+<tr><td><code>real_time_factor(total_s, audio_s)</code></td><td>Validated ratio.</td></tr>
+<tr><td><code>audio_duration(path)</code></td><td>Duration from file metadata via soundfile.</td></tr>
+</tbody>
+</table>
+<h3>Dataset and evaluation</h3>
+<ul>
+<li><code>EvaluationSample(id, audio_path, ground_truth_transcript, ground_truth_response)</code></li>
+<li><code>load_dataset(path)</code>: nonempty JSON array; required keys <code>audio_path</code>, <code>ground_truth_transcript</code>, <code>ground_truth_response</code>; optional unique string <code>id</code> (default: row number); audio paths resolve from the JSON's directory. Extra fields such as <code>response_source</code> are tolerated.</li>
+<li><code>analyze_error_propagation(pipeline, sample, quality_scorer=...)</code>: the paired comparison for one sample; returns the per-sample record.</li>
+<li><code>aggregate_results(rows)</code>: corpus WER/CER/RTF plus mean, p50, p95 distributions, degraded/improved fractions and exact-match rates.</li>
+<li><code>evaluate_dataset(pipeline, samples, *, quality_scorer, quality_name, fail_fast)</code>: sequential loop that records failures and excludes them from aggregates.</li>
+<li><code>save_report(report, output_dir)</code>: writes <code>report.json</code>, <code>samples.csv</code>, <code>failures.csv</code>, <code>wer_vs_quality.csv</code>.</li>
+</ul>
+<h3>CLI</h3>
+<pre><code>python evaluate.py --dataset DATA.json [--config config.yaml]
+                   [--output-dir outputs/evaluation] [--warmup N] [--fail-fast]</code></pre>
+<table>
+<thead><tr><th>Flag</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>--dataset</code> (required)</td><td>Evaluator manifest JSON.</td></tr>
+<tr><td><code>--config</code></td><td>Config file (default: <code>config.yaml</code> next to the script).</td></tr>
+<tr><td><code>--output-dir</code></td><td>Where the four output files go (default <code>outputs/evaluation</code>).</td></tr>
+<tr><td><code>--warmup N</code></td><td>Unmeasured paired runs on the first sample before the real pass (the first sample is still evaluated afterwards).</td></tr>
+<tr><td><code>--fail-fast</code></td><td>Stop on the first failed sample.</td></tr>
+</tbody>
+</table>
+<p>The CLI refuses to run if <code>llm.generation.do_sample</code> is true, because the paired comparison needs deterministic decoding. It loads both models once, prints the summary JSON, and exits 1 if any sample failed (partial reports are still saved).</p>
+
+<h2 id="prepare"><code>prepare_data.py</code></h2>
+<p>Builds the evaluator JSON from a local audio folder (with <code>.txt</code> and <code>.response.txt</code> sidecars) or a CSV, TSV or JSON manifest. Works only with local files; it does not download datasets or detect the language.</p>
+<pre><code>python prepare_data.py --source SRC [--output data/test.json] [--limit 100] [--seed 42]
+                       [--response-mode require|placeholder]
+                       [--audio-column audio_path]
+                       [--transcript-column ground_truth_transcript]
+                       [--response-column ground_truth_response] [--overwrite]</code></pre>
+<ul>
+<li><code>--limit 0</code> selects every sample; otherwise a seeded random subset (default 100).</li>
+<li><code>--response-mode placeholder</code> fills only <em>missing</em> answers with a fixed Telugu test string and flags the dataset as invalid for response-quality scoring.</li>
+<li>Refuses to overwrite existing output without <code>--overwrite</code>, never overwrites source audio or labels, and fails on missing audio, duplicates or empty labels.</li>
+<li>Writes <code>&lt;output&gt;.json</code> and <code>&lt;output&gt;.metadata.json</code> (source, counts, seed, mode, placeholder count).</li>
+</ul>
+
+<h2 id="synth"><code>synthesize_corpus.py</code></h2>
+<pre><code>python synthesize_corpus.py [--clean-out corpus_clean] [--noisy-out corpus_noisy]
+                            [--snr-db 8.0] [--limit 0] [--skip-clean]</code></pre>
+<ul>
+<li>Constants: <code>TTS_MODEL_NAME = "facebook/mms-tts-tel"</code>, <code>TARGET_SNR_DB = 8.0</code> (the default; <strong>the reported runs use <code>--snr-db 0</code></strong>), <code>NOISE_SEED = 42</code>.</li>
+<li><code>build_qa_pairs()</code> returns the 129 <code>(id, question, answer)</code> triples. <code>add_noise(signal, snr_db, rng)</code> adds Gaussian noise at a fixed SNR.</li>
+<li><code>--limit N</code> synthesizes only the first N pairs. <code>--skip-clean</code> still synthesizes each clean waveform in memory but writes only the noisy copy.</li>
+</ul>
+
+<h2 id="plot"><code>plot_results.py</code></h2>
+<pre><code>python plot_results.py --input report.json|samples.csv|wer_vs_quality.csv
+                       [--output-dir outputs/plots] [--quality-label "Word overlap F1"]</code></pre>
+<p>Matplotlib only, rendered headless. Produces <code>wer_vs_quality.png</code> (both series against ASR WER) and <code>latency_breakdown.png</code> (stacked mean ASR, LLM and overhead, plus the clean-transcript LLM time as a separate bar). JSON input also reports the failed-sample count; CSV input cannot. Undefined points are omitted with counts in the legend; malformed numbers and incomplete latency records are rejected. It accepts only evaluation outputs, not the prepared dataset JSON. Existing plot files in the output directory are replaced.</p>
+
+<h2 id="halluc"><code>hallucination.py</code></h2>
+<pre><code>python hallucination.py --reports R1.json [R2.json ...] [--output OUT.json]</code></pre>
+<ul>
+<li><code>extract_key_fact(audio_path, reference_answer)</code>: capital name or sum word, chosen by the audio file prefix.</li>
+<li><code>accepted_forms(audio_path, key_fact)</code>: the word, plus the digit form for sums.</li>
+<li><code>classify_response(response, key_fact_or_forms)</code>: <code>correct</code> / <code>abstained</code> / <code>hallucinated</code>.</li>
+<li><code>fact_rates(samples, response_field)</code> and <code>analyze_report(path)</code>: counts and rates for the ASR-transcript arm and the human-transcript arm. The condition name in the output is the report's parent folder name.</li>
+<li>Constant: <code>UNCERTAINTY_MARKERS</code> (three Telugu phrases).</li>
+</ul>
+
+<h2 id="boot"><code>bootstrap.py</code></h2>
+<pre><code>python bootstrap.py --a REF.json --b COMPARE.json [--metric wer|cer]
+                    [--resamples 10000] [--seed 0]</code></pre>
+<p><code>paired_bootstrap(edits_a, units_a, edits_b, units_b, *, resamples, seed, level)</code> returns <code>difference</code> (B minus A), <code>ci_low</code>, <code>ci_high</code>, <code>samples</code>. <code>compare_reports(path_a, path_b, metric)</code> pairs rows by sample ID and errors if the two reports do not cover the same IDs.</p>
+
+<h2 id="verify"><code>verify_task2.py</code></h2>
+<pre><code>python verify_task2.py [--config config.yaml] [--output-dir outputs/verification]</code></pre>
+<p>Checks: required source files exist and parse; installed dependencies match <code>requirements.txt</code> ranges; configuration types and ranges (including Telugu ASR settings and deterministic decoding); device availability; write access to the cache, output and default <code>data</code>, <code>outputs/evaluation</code>, <code>outputs/plots</code> folders. Then it generates exactly three silent dummy WAVs and runs the real <code>SpeechPipeline</code> and <code>evaluate_dataset</code> with injected stand-ins whose outputs <em>and clocks</em> are synthetic, comparing results with fixed expected values for perfect, substitution and deletion cases plus insertion, empty-reference and Unicode-normalization checks.</p>
+<p>Outputs: <code>verification.log</code>, <code>checks.json</code> (PASS / FAIL / WARN / UNAVAILABLE with independent setup-readiness and mock-pass flags), <code>summary.md</code>, and a <code>mock/</code> folder. Exit status 0 when no FAIL or UNAVAILABLE checks remain; warnings (such as an unpinned revision) do not fail the run.</p>
+<div class="callout warn"><span class="title">What it does not verify</span>
+Model availability, chat-template compatibility, memory fit, or any real speech quality. The mock timings are synthetic and must never be quoted as a benchmark. A relevant rule: <code>asr.language</code> must be <code>telugu</code>/<code>te</code>, or <code>null</code> only when the model name contains "telugu".</div>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

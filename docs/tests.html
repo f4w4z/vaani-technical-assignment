@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tests | Report</title>
+<meta name="description" content="All 30 offline unit tests: what each file covers and what a passing run does and does not prove.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem('docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+</head>
+<body data-page="tests">
+<main id="content">
+
+<div class="eyebrow">Reference</div>
+<h1>Tests</h1>
+<p class="lead">30 unit tests in 8 files, all offline: no model downloads, no GPU, no network. They protect the evaluation code, which is where a silent bug would quietly corrupt every reported number.</p>
+
+<pre><code>python -m unittest discover -s tests -v</code></pre>
+<p>Expected: <code>Ran 30 tests</code> and <code>OK</code> in about two seconds. Use <code>-s tests</code>: the folder is not a package, so <code>python -m unittest tests.test_x</code> will not import.</p>
+
+<div class="callout note"><span class="title">What passing means</span>
+It means the metric arithmetic, dataset handling, config guards, plotting and the denoise, hallucination and bootstrap logic behave as specified on constructed inputs. It does <strong>not</strong> mean the models are accurate; model quality is measured by the evaluation, not by the tests.</div>
+
+<h2 id="summary">Coverage by file</h2>
+<table>
+<thead><tr><th>File</th><th class="num">Tests</th><th>Covers</th></tr></thead>
+<tbody>
+<tr><td><code>test_evaluate.py</code></td><td class="num">5</td><td>Edit distance and Unicode policy; quality score and RTF; dataset loading and validation; paired comparison and corpus weighting; batch reporting and failure handling</td></tr>
+<tr><td><code>test_pipeline.py</code></td><td class="num">4</td><td>Stage hand-off and the empty-transcript guard; config paths and validation; audio mono mix, resampling and missing file; LLM returns only the continuation and enforces the input budget</td></tr>
+<tr><td><code>test_prepare_data.py</code></td><td class="num">3</td><td>Folder round trip and seeded subset reproducibility; manifest column mapping and explicit placeholders; invalid sources and duplicate audio</td></tr>
+<tr><td><code>test_plot_results.py</code></td><td class="num">3</td><td>JSON and CSV round trip; missing scatter pairs and optional latency; invalid data is not silently plotted</td></tr>
+<tr><td><code>test_verify_task2.py</code></td><td class="num">5</td><td>Config guards; dependency version constraints are enforced; directory failures and independent mock status; three real evaluator pairs and Markdown output; wrong metric results raise instead of passing</td></tr>
+<tr><td><code>test_denoise.py</code></td><td class="num">3</td><td>Noise-power reduction on a bursty tone; input validation; short-signal pass-through</td></tr>
+<tr><td><code>test_hallucination.py</code></td><td class="num">4</td><td>Key-fact extraction for both templates; three-way classification; sum digit form counts but only as a whole number; rates over report rows</td></tr>
+<tr><td><code>test_bootstrap.py</code></td><td class="num">3</td><td>Identical systems give zero difference and interval; consistent improvement excludes zero; determinism for a seed and input validation</td></tr>
+<tr><td><strong>Total</strong></td><td class="num"><strong>30</strong></td><td></td></tr>
+</tbody>
+</table>
+
+<h2 id="details">Notable details</h2>
+<h3 id="metrics-tests">Metrics are checked against hand-computed values</h3>
+<p><code>test_evaluate.py</code> and the self-check inside <code>verify_task2.py</code> use fixed cases with known answers (perfect match, substitution, deletion, insertion, empty reference, Unicode normalization), so a regression in the edit-distance code shows up as a mismatch rather than a plausible-looking number.</p>
+<h3 id="no-models">Models are replaced by stand-ins</h3>
+<p>Pipeline and evaluation tests inject simple fake ASR and LLM objects, and the verifier test patches <code>from_pretrained</code> to fail if a download is attempted, so they run anywhere. The wrappers' audio handling is tested on tiny generated WAV files.</p>
+<h3 id="bad-input">Bad input must fail loudly</h3>
+<p>Several tests assert errors rather than success: malformed datasets, duplicate IDs, missing audio, wrong-shaped plot data, a wrong metric value in the verifier, an out-of-range denoise parameter, a mismatched bootstrap pair. The project's rule is that invalid data should never be silently dropped or plotted.</p>
+<h3 id="denoise-test">A test that was wrong first</h3>
+<p>The first denoise test used a constant sine tone, and failed (error went up, not down). The cause was the algorithm's assumption that each frequency bin has quiet frames, which a sustained tone does not. The test was corrected to use a bursty tone with gaps, which resembles speech, rather than weakening the assertion. See the <a href="extension.html#method">extension page</a>.</p>
+
+<h2 id="history">Growth of the suite</h2>
+<table>
+<thead><tr><th>Stage</th><th class="num">Tests</th></tr></thead>
+<tbody>
+<tr><td>Original suite (pipeline, evaluate, prepare, plot, verify)</td><td class="num">20</td></tr>
+<tr><td>+ denoise</td><td class="num">23</td></tr>
+<tr><td>+ hallucination classifier</td><td class="num">27</td></tr>
+<tr><td>+ bootstrap</td><td class="num">30</td></tr>
+</tbody>
+</table>
+
+<h2 id="not-covered">Not covered by tests</h2>
+<ul>
+<li>Real model inference (that is the evaluation itself).</li>
+<li><code>synthesize_corpus.py</code>' TTS step, which needs a model download. Its pure helpers (<code>build_qa_pairs</code>, <code>add_noise</code>) are not unit-tested either.</li>
+<li>The LaTeX reports and this documentation site.</li>
+</ul>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

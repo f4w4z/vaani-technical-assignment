@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Results | Report</title>
+<meta name="description" content="Measured results for the Telugu pipeline: WER, CER, latency, response quality, hallucination rate, confidence intervals and plots across clean, noisy and denoised conditions.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem('docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+</head>
+<body data-page="results">
+<main id="content">
+
+<div class="eyebrow">Part II: Pipeline</div>
+<h1>Results</h1>
+<p class="lead">Three real evaluation runs of 129 samples each, on a laptop GPU, with the models and metrics described in the previous pages. Every number here comes from the saved <code>report.json</code> files.</p>
+
+<div class="callout note"><span class="title">Setup in one line</span>
+<code>vasista22/whisper-telugu-small</code> to <code>Qwen2.5-1.5B-Instruct</code>, fp16, greedy decoding, RTX 4060 Laptop, transformers 4.57.6. Conditions: <strong>Clean</strong>; <strong>Noisy</strong> (0 dB SNR, no denoising); <strong>Noisy+DN</strong> (same noisy audio, spectral-subtraction denoising on). 129 of 129 samples succeeded in every run.</div>
+
+<h2 id="baseline">Main results</h2>
+<table>
+<thead><tr><th>Metric</th><th class="num">Clean</th><th class="num">Noisy</th><th class="num">Noisy+DN</th></tr></thead>
+<tbody>
+<tr><td>Corpus WER</td><td class="num">0.2928</td><td class="num">0.3377</td><td class="num">0.3391</td></tr>
+<tr><td>Corpus CER</td><td class="num">0.0745</td><td class="num">0.0964</td><td class="num">0.0992</td></tr>
+<tr><td>Pipeline RTF (corpus)</td><td class="num">4.154</td><td class="num">4.993</td><td class="num">4.948</td></tr>
+<tr><td>ASR-only RTF (corpus)</td><td class="num">0.501</td><td class="num">0.587</td><td class="num">0.579</td></tr>
+<tr><td>Mean ASR time (s)</td><td class="num">1.742</td><td class="num">2.054</td><td class="num">2.026</td></tr>
+<tr><td>Mean LLM time (s)</td><td class="num">12.712</td><td class="num">15.417</td><td class="num">15.285</td></tr>
+<tr><td>Mean total time (s)</td><td class="num">14.455</td><td class="num">17.471</td><td class="num">17.311</td></tr>
+<tr><td>Response F1, answer from ASR transcript</td><td class="num">0.1657</td><td class="num">0.1548</td><td class="num">0.1547</td></tr>
+<tr><td>Response F1, answer from human transcript</td><td class="num">0.1687</td><td class="num">0.1687</td><td class="num">0.1687</td></tr>
+<tr><td>Mean quality drop (human minus ASR)</td><td class="num">0.0031</td><td class="num">0.0139</td><td class="num">0.0141</td></tr>
+<tr><td>Samples degraded / improved by ASR errors</td><td class="num">52.7% / 37.2%</td><td class="num">55.0% / 34.9%</td><td class="num">56.6% / 34.9%</td></tr>
+<tr><td>Exact-match rate (either arm)</td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td>Samples succeeded / failed</td><td class="num">129 / 0</td><td class="num">129 / 0</td><td class="num">129 / 0</td></tr>
+</tbody>
+</table>
+<p>The human-transcript F1 is the same in every column because it does not depend on audio: it is the same LLM answering the same ground-truth transcripts.</p>
+
+<h3 id="distributions">Distributions</h3>
+<table class="compact">
+<thead><tr><th>Metric</th><th>Statistic</th><th class="num">Clean</th><th class="num">Noisy</th><th class="num">Noisy+DN</th></tr></thead>
+<tbody>
+<tr><td rowspan="3">Per-sample WER</td><td>mean</td><td class="num">0.317</td><td class="num">0.360</td><td class="num">0.362</td></tr>
+<tr><td>p50</td><td class="num">0.333</td><td class="num">0.333</td><td class="num">0.333</td></tr>
+<tr><td>p95</td><td class="num">0.667</td><td class="num">0.667</td><td class="num">0.750</td></tr>
+<tr><td rowspan="3">Per-sample CER</td><td>mean</td><td class="num">0.079</td><td class="num">0.105</td><td class="num">0.106</td></tr>
+<tr><td>p50</td><td class="num">0.053</td><td class="num">0.083</td><td class="num">0.077</td></tr>
+<tr><td>p95</td><td class="num">0.215</td><td class="num">0.310</td><td class="num">0.326</td></tr>
+<tr><td rowspan="3">ASR time (s)</td><td>mean</td><td class="num">1.742</td><td class="num">2.054</td><td class="num">2.026</td></tr>
+<tr><td>p50</td><td class="num">1.531</td><td class="num">2.142</td><td class="num">2.114</td></tr>
+<tr><td>p95</td><td class="num">2.581</td><td class="num">2.705</td><td class="num">2.605</td></tr>
+<tr><td rowspan="3">LLM time (s)</td><td>mean</td><td class="num">12.712</td><td class="num">15.417</td><td class="num">15.285</td></tr>
+<tr><td>p50</td><td class="num">10.893</td><td class="num">15.763</td><td class="num">15.608</td></tr>
+<tr><td>p95</td><td class="num">17.839</td><td class="num">17.317</td><td class="num">17.016</td></tr>
+<tr><td rowspan="3">Total time (s)</td><td>mean</td><td class="num">14.455</td><td class="num">17.471</td><td class="num">17.311</td></tr>
+<tr><td>p50</td><td class="num">12.122</td><td class="num">17.675</td><td class="num">17.436</td></tr>
+<tr><td>p95</td><td class="num">20.236</td><td class="num">19.489</td><td class="num">19.210</td></tr>
+<tr><td rowspan="3">Per-sample RTF</td><td>mean</td><td class="num">4.252</td><td class="num">5.190</td><td class="num">5.146</td></tr>
+<tr><td>p50</td><td class="num">4.425</td><td class="num">4.969</td><td class="num">4.962</td></tr>
+<tr><td>p95</td><td class="num">5.830</td><td class="num">7.682</td><td class="num">7.463</td></tr>
+</tbody>
+</table>
+<p>The per-sample WER median is a coarse 0.333 because the questions are short (a few words), so a single word error moves the rate in large steps. That is also why the WER-vs-quality scatter plots show vertical stripes.</p>
+
+<h2 id="latency">Latency: where the time goes</h2>
+<ul>
+<li>The <strong>ASR stage is real time</strong>: ASR-only RTF is 0.50 to 0.59, so it transcribes faster than the audio plays.</li>
+<li>The <strong>full pipeline is not</strong>: RTF is 4.15 to 4.99, because the LLM stage takes about <strong>88%</strong> of pipeline time (12.71 of 14.45 s clean; 15.42 of 17.47 s noisy).</li>
+<li>Noisy runs are slower: mean LLM time rises by about 2.7 s. With greedy decoding on a fixed token budget this is consistent with noisier transcripts producing longer or different generations, not with any change to the LLM.</li>
+</ul>
+<div class="callout note"><span class="title">Scope of the latency claim</span>
+The 88% share is a property of this setup: a 1.5B model on a laptop GPU, greedy decoding, up to 256 new tokens. It is not a statement about cascades in general. These are also not the streaming first-audio latencies discussed in Part I.</div>
+
+<h2 id="correctness">Correctness and hallucination</h2>
+<p>From the <a href="metrics.html#hallucination">key-fact classifier</a>, out of 129 answers per arm:</p>
+<table>
+<thead><tr><th>Condition</th><th>Answer from</th><th class="num">Correct</th><th class="num">Abstained</th><th class="num">Hallucinated</th><th class="num">Hallucination rate</th></tr></thead>
+<tbody>
+<tr><td>Clean</td><td>ASR transcript</td><td class="num">0</td><td class="num">0</td><td class="num">129</td><td class="num">1.000</td></tr>
+<tr><td>Clean</td><td>human transcript</td><td class="num">3</td><td class="num">0</td><td class="num">126</td><td class="num">0.977</td></tr>
+<tr><td>Noisy</td><td>ASR transcript</td><td class="num">0</td><td class="num">0</td><td class="num">129</td><td class="num">1.000</td></tr>
+<tr><td>Noisy</td><td>human transcript</td><td class="num">3</td><td class="num">0</td><td class="num">126</td><td class="num">0.977</td></tr>
+<tr><td>Noisy+DN</td><td>ASR transcript</td><td class="num">0</td><td class="num">0</td><td class="num">129</td><td class="num">1.000</td></tr>
+<tr><td>Noisy+DN</td><td>human transcript</td><td class="num">3</td><td class="num">0</td><td class="num">126</td><td class="num">0.977</td></tr>
+</tbody>
+</table>
+<div class="callout bad"><span class="title">The LLM is the failure, and it never abstains</span>
+Even from a <em>perfect</em> transcript, only 3 of 129 answers state the right fact. Across all six arms (774 answers) the model abstained zero times, so every miss is a confident non-answer or wrong answer. Typically it restates the question in fluent, repetitive Telugu without naming the capital or the sum. ASR errors cost little on top of that: the F1 gap between human and ASR input is only 0.003 (clean) to 0.014 (noisy).</div>
+<p>This is a real capability limit of the smallest Qwen2.5 checkpoint on Telugu factual recall and instruction following in this setup. A larger LLM, ruled out here by GPU memory, would be the first remedy. The check is lexical, so the rate is an upper bound (see its <a href="metrics.html#hallucination">limits</a>).</p>
+
+<h2 id="ci">Do the differences exceed noise?</h2>
+<p>95% paired bootstrap intervals (10,000 resamples over the 129 questions, paired by question):</p>
+<table>
+<thead><tr><th>Comparison</th><th>Metric</th><th class="num">Difference</th><th class="num">95% CI</th><th>Reading</th></tr></thead>
+<tbody>
+<tr><td>Clean to Noisy</td><td>WER</td><td class="num">+0.0449</td><td class="num">+0.0141 to +0.0769</td><td><span class="badge bad">Real increase</span></td></tr>
+<tr><td>Clean to Noisy</td><td>CER</td><td class="num">+0.0219</td><td class="num">+0.0083 to +0.0364</td><td><span class="badge bad">Real increase</span></td></tr>
+<tr><td>Noisy to Noisy+DN</td><td>WER</td><td class="num">+0.0014</td><td class="num">-0.0144 to +0.0174</td><td><span class="badge warn">Indistinguishable from 0</span></td></tr>
+<tr><td>Noisy to Noisy+DN</td><td>CER</td><td class="num">+0.0028</td><td class="num">-0.0041 to +0.0099</td><td><span class="badge warn">Indistinguishable from 0</span></td></tr>
+</tbody>
+</table>
+<p>Noise genuinely hurts recognition (the interval excludes zero even though the clean and noisy renderings differ). Denoising does not measurably change it. See <a href="extension.html">the extension page</a>.</p>
+
+<h2 id="plots">Plots</h2>
+<p>Each condition has a WER-vs-quality scatter (ASR-transcript and human-transcript series share the same WER x-value per sample) and a stacked latency bar. WER is a ratio and is not clipped at 1.</p>
+<div class="fig-grid">
+<figure class="fig"><img src="assets/img/plot-clean-wer.png" alt="Clean: WER vs response quality scatter"><figcaption><b>Clean:</b> per-sample WER against response F1.</figcaption></figure>
+<figure class="fig"><img src="assets/img/plot-clean-latency.png" alt="Clean: mean latency breakdown"><figcaption><b>Clean:</b> mean latency; the LLM stage dominates.</figcaption></figure>
+<figure class="fig"><img src="assets/img/plot-noisy_baseline-wer.png" alt="Noisy baseline: WER vs response quality scatter"><figcaption><b>Noisy (0 dB), no denoising:</b> per-sample WER against response F1.</figcaption></figure>
+<figure class="fig"><img src="assets/img/plot-noisy_baseline-latency.png" alt="Noisy baseline: mean latency breakdown"><figcaption><b>Noisy (0 dB), no denoising:</b> mean latency.</figcaption></figure>
+<figure class="fig"><img src="assets/img/plot-noisy_denoised-wer.png" alt="Noisy denoised: WER vs response quality scatter"><figcaption><b>Noisy + denoising:</b> per-sample WER against response F1.</figcaption></figure>
+<figure class="fig"><img src="assets/img/plot-noisy_denoised-latency.png" alt="Noisy denoised: mean latency breakdown"><figcaption><b>Noisy + denoising:</b> mean latency.</figcaption></figure>
+</div>
+
+<h2 id="summary">What the results establish</h2>
+<table>
+<thead><tr><th>Claim</th><th>Evidence</th></tr></thead>
+<tbody>
+<tr><td>The pipeline works end to end on 129 Telugu utterances</td><td>129/129 succeeded in all three runs</td></tr>
+<tr><td>Telugu ASR is usable but imperfect on clean synthetic speech</td><td>WER 0.293, CER 0.075</td></tr>
+<tr><td>Noise measurably hurts ASR</td><td>WER +0.045, CI excludes 0</td></tr>
+<tr><td>Spectral-subtraction denoising does not fix it</td><td>WER +0.001, CI -0.014 to +0.017</td></tr>
+<tr><td>The LLM, not ASR, limits answer quality</td><td>0/129 correct from speech, 3/129 from perfect transcripts, 0 abstentions</td></tr>
+<tr><td>The cascade is not real time end to end here</td><td>RTF 4.15 to 4.99; LLM about 88% of time</td></tr>
+</tbody>
+</table>
+<p>What they do <em>not</em> establish is covered on <a href="limitations.html">Limitations</a>: synthetic speech, small models, a lexical quality proxy, and a single deterministic run per condition.</p>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

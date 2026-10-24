@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Repository map | Report</title>
+<meta name="description" content="Every file and folder in the repository, what it is, and whether it is committed or git-ignored.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem('docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+</head>
+<body data-page="files">
+<main id="content">
+
+<div class="eyebrow">Reference</div>
+<h1>Repository map</h1>
+<p class="lead">Every file and folder, with its purpose and whether it is in version control.</p>
+
+<h2 id="tree">Layout</h2>
+<pre class="tree"><code>.
+|-- asr.py                    ASR wrapper (Whisper-family), optional denoising
+|-- llm.py                    LLM wrapper (chat template, greedy generation)
+|-- pipeline.py               SpeechPipeline + JSON CLI + load_config
+|-- denoise.py                spectral-subtraction front end
+|-- evaluate.py               WER/CER/RTF/F1 metrics + batch evaluation CLI
+|-- prepare_data.py           folder/manifest -> evaluator JSON
+|-- synthesize_corpus.py      TTS corpus generator (clean + noisy)
+|-- plot_results.py           headless plots from evaluation outputs
+|-- hallucination.py          correct / abstained / hallucinated classifier
+|-- bootstrap.py              paired bootstrap intervals
+|-- verify_task2.py           setup checks + mock end-to-end run
+|-- config.yaml               baseline configuration
+|-- config_denoised.yaml      same, with asr.denoise: true
+|-- requirements.txt          dependency ranges
+|-- README.md                 operating manual
+|-- AGENTS.md                 repository workflow rules
+|-- DraftTask1.md             original long-form Task 1 draft
+|-- tests/                    30 offline unit tests (8 files)
+|-- reports/                  papers: report (unified), task1, task2 (.tex/.md/.pdf)
+|-- docs/                     this documentation site
+|
+|-- corpus_clean/  corpus_noisy/        generated audio + labels     [git-ignored]
+|-- data/                               evaluator manifests          [git-ignored]
+|-- outputs/                            evaluation, plots, verify    [git-ignored]
+|-- .cache/huggingface/                 downloaded model weights     [git-ignored]
+|-- tmp/                                scratch/diagnostics          [git-ignored]
+|-- moshi.pdf  "qwen omni.pdf"          source papers (local copies) [git-ignored]</code></pre>
+
+<h2 id="source">Source files</h2>
+<table>
+<thead><tr><th>Path</th><th>Description</th><th>Docs</th></tr></thead>
+<tbody>
+<tr><td><code>asr.py</code></td><td><code>ASRWrapper</code>, <code>resolve_runtime</code>, <code>synchronize</code></td><td><a href="modules.html#asr">Reference</a></td></tr>
+<tr><td><code>llm.py</code></td><td><code>LLMWrapper</code></td><td><a href="modules.html#llm">Reference</a></td></tr>
+<tr><td><code>pipeline.py</code></td><td><code>SpeechPipeline</code>, <code>PipelineResult</code>, <code>load_config</code>, CLI</td><td><a href="modules.html#pipeline-py">Reference</a></td></tr>
+<tr><td><code>denoise.py</code></td><td><code>spectral_subtract_denoise</code></td><td><a href="extension.html">Extension</a></td></tr>
+<tr><td><code>evaluate.py</code></td><td>Metric functions, paired evaluation, report writing, CLI</td><td><a href="metrics.html">Metrics</a></td></tr>
+<tr><td><code>prepare_data.py</code></td><td>Manifest builder</td><td><a href="dataset.html#formats">Dataset formats</a></td></tr>
+<tr><td><code>synthesize_corpus.py</code></td><td>Corpus generator</td><td><a href="dataset.html">Dataset</a></td></tr>
+<tr><td><code>plot_results.py</code></td><td>Plots</td><td><a href="results.html#plots">Plots</a></td></tr>
+<tr><td><code>hallucination.py</code></td><td>Fact-based classifier</td><td><a href="metrics.html#hallucination">Definition</a></td></tr>
+<tr><td><code>bootstrap.py</code></td><td>Bootstrap CIs</td><td><a href="metrics.html#bootstrap">Method</a></td></tr>
+<tr><td><code>verify_task2.py</code></td><td>Verifier</td><td><a href="modules.html#verify">Reference</a></td></tr>
+</tbody>
+</table>
+
+<h2 id="config-files">Configuration and project files</h2>
+<table>
+<thead><tr><th>Path</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>config.yaml</code></td><td>Baseline models, decoding and paths. <a href="pipeline.html#config">Reference</a>.</td></tr>
+<tr><td><code>config_denoised.yaml</code></td><td>Identical but <code>asr.denoise: true</code>.</td></tr>
+<tr><td><code>requirements.txt</code></td><td>Dependency ranges, checked by <code>verify_task2.py</code>.</td></tr>
+<tr><td><code>README.md</code></td><td>The repository's operating manual: running, data preparation, evaluation, plotting, verification, hallucination, bootstrap, extension.</td></tr>
+<tr><td><code>AGENTS.md</code></td><td>Workflow rules: commit each completed logical step with concise Conventional Commits messages; run appropriate checks first; keep generated outputs, model caches, temporary dependencies and local reference documents out of version control.</td></tr>
+<tr><td><code>DraftTask1.md</code></td><td>The original, longer Task 1 draft (with figure specifications and a verification checklist). The shorter <code>reports/task1.md</code> is the cleaned-up version.</td></tr>
+<tr><td><code>.gitignore</code></td><td>Ignores bytecode, virtualenvs, caches, <code>outputs/</code>, <code>data/</code>, <code>tmp/</code>, <code>corpus_clean/</code>, <code>corpus_noisy/</code> and the local reference PDFs.</td></tr>
+</tbody>
+</table>
+
+<h2 id="tests-dir"><code>tests/</code></h2>
+<p><code>test_evaluate.py</code>, <code>test_pipeline.py</code>, <code>test_prepare_data.py</code>, <code>test_plot_results.py</code>, <code>test_verify_task2.py</code>, <code>test_denoise.py</code>, <code>test_hallucination.py</code>, <code>test_bootstrap.py</code>. See <a href="tests.html">Tests</a>.</p>
+
+<h2 id="reports-dir"><code>reports/</code></h2>
+<table>
+<thead><tr><th>File</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>report.tex</code>, <code>report.pdf</code></td><td>The single ACL-style paper (11 pages) covering both parts.</td></tr>
+<tr><td><code>task1.md</code>, <code>.tex</code>, <code>.pdf</code></td><td>Standalone Task 1 write-up (13 pages), with the three TikZ diagrams.</td></tr>
+<tr><td><code>task2.md</code>, <code>.tex</code>, <code>.pdf</code></td><td>Standalone Task 2 write-up (7 pages), with the plots and the model-compatibility story.</td></tr>
+</tbody>
+</table>
+
+<h2 id="docs-dir"><code>docs/</code></h2>
+<table>
+<thead><tr><th>Path</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>*.html</code></td><td>The pages of this site, content only.</td></tr>
+<tr><td><code>assets/style.css</code></td><td>Theme (light and dark), layout, components.</td></tr>
+<tr><td><code>assets/app.js</code></td><td>Builds the navigation, on-page contents, search, theme toggle and copy buttons. No libraries.</td></tr>
+<tr><td><code>assets/search-index.js</code></td><td>Generated search index (<code>python docs/build_search_index.py</code>).</td></tr>
+<tr><td><code>assets/fonts/</code></td><td>Inter variable font (Latin subset, SIL Open Font License 1.1), self-hosted so the site needs no network.</td></tr>
+<tr><td><code>assets/img/</code></td><td>Three diagrams cropped from the paper and six result plots (copies of the ignored <code>outputs/plots</code>).</td></tr>
+<tr><td><code>assets/pdf/</code></td><td>Copies of the three PDFs, so the site links work when <code>docs/</code> is served on its own.</td></tr>
+<tr><td><code>build_search_index.py</code></td><td>Regenerates the search index from the pages' headings and text.</td></tr>
+</tbody>
+</table>
+
+<h2 id="generated">Generated, git-ignored folders</h2>
+<table>
+<thead><tr><th>Path</th><th>Made by</th><th>Contents</th></tr></thead>
+<tbody>
+<tr><td><code>corpus_clean/</code>, <code>corpus_noisy/</code></td><td><code>synthesize_corpus.py</code></td><td>129 x (<code>.wav</code>, <code>.txt</code>, <code>.response.txt</code>) each</td></tr>
+<tr><td><code>data/</code></td><td><code>prepare_data.py</code></td><td><code>test_clean.json</code>, <code>test_noisy.json</code> and metadata files</td></tr>
+<tr><td><code>outputs/evaluation/{clean,noisy_baseline,noisy_denoised}/</code></td><td><code>evaluate.py</code></td><td><code>report.json</code>, <code>samples.csv</code>, <code>failures.csv</code>, <code>wer_vs_quality.csv</code></td></tr>
+<tr><td><code>outputs/evaluation/hallucination.json</code></td><td><code>hallucination.py</code></td><td>Correct / abstained / hallucinated counts per condition and arm</td></tr>
+<tr><td><code>outputs/plots/&lt;condition&gt;/</code></td><td><code>plot_results.py</code></td><td><code>wer_vs_quality.png</code>, <code>latency_breakdown.png</code></td></tr>
+<tr><td><code>outputs/verification/</code></td><td><code>verify_task2.py</code></td><td><code>verification.log</code>, <code>checks.json</code>, <code>summary.md</code>, <code>mock/</code></td></tr>
+<tr><td><code>.cache/huggingface/</code></td><td>Hugging Face downloads</td><td>Model weights (about 1 to 3 GB)</td></tr>
+</tbody>
+</table>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

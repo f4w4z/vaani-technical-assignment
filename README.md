@@ -306,6 +306,15 @@ An interval containing 0 means the difference is not distinguishable from
 question-sampling noise. It does not capture speaker or recording variation
 that the question set lacks.
 
+### Documentation site
+
+`docs/` is a static site (plain HTML, CSS and JavaScript, no build step, no
+framework) that documents the whole project: the analysis, pipeline, dataset,
+metrics, results, decisions and limitations. Open `docs/index.html` directly,
+or serve the folder (`python -m http.server --directory docs`). After editing
+a page, regenerate the search index and check every internal link with
+`python docs/build_search_index.py`.
+
 ### Unified report
 
 `reports/report.pdf` is the single ACL-style paper that combines the

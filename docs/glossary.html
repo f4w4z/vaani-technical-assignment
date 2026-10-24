@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Glossary and FAQ | Report</title>
+<meta name="description" content="Definitions of the terms used across these docs, plus answers to common errors and questions.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem('docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+</head>
+<body data-page="glossary">
+<main id="content">
+
+<div class="eyebrow">Reference</div>
+<h1>Glossary and FAQ</h1>
+<p class="lead">Terms used across the docs, and fixes for the problems most likely to be hit.</p>
+
+<h2 id="glossary">Glossary</h2>
+
+<h3 id="g-eval">Evaluation terms</h3>
+<table>
+<thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><strong>WER</strong></td><td>Word error rate: word-level edits (insertions + deletions + substitutions) divided by reference words. A ratio, can exceed 1.</td></tr>
+<tr><td><strong>CER</strong></td><td>Character error rate: the same at the level of Unicode code points (whitespace removed).</td></tr>
+<tr><td><strong>RTF</strong></td><td>Real-time factor: processing seconds divided by audio seconds. Below 1 is faster than real time.</td></tr>
+<tr><td><strong>SNR</strong></td><td>Signal-to-noise ratio in dB. 0 dB means noise power equals signal power; 8 dB is cleaner.</td></tr>
+<tr><td><strong>Corpus rate</strong></td><td>A rate computed from summed edits over summed reference length, so long utterances weigh more than in a per-sample mean.</td></tr>
+<tr><td><strong>Word-overlap F1</strong></td><td>Lexical similarity between a reference and generated answer using multiset word overlap. A proxy, not semantic correctness.</td></tr>
+<tr><td><strong>Quality drop</strong></td><td>Human-transcript answer quality minus ASR-transcript answer quality; positive means ASR errors hurt.</td></tr>
+<tr><td><strong>Hallucinated</strong></td><td>In this project: an answer that does not state the reference fact and does not hedge or abstain. See <a href="metrics.html#hallucination">the definition</a>.</td></tr>
+<tr><td><strong>Abstained</strong></td><td>A non-answer containing an uncertainty marker ("don't know", "sorry", "not clear").</td></tr>
+<tr><td><strong>Paired bootstrap</strong></td><td>Resampling the same questions in two systems at once to get an interval for their difference.</td></tr>
+<tr><td><strong>95% CI</strong></td><td>The 2.5th to 97.5th percentile of the bootstrap distribution. Containing 0 means not distinguishable from sampling noise.</td></tr>
+<tr><td><strong>Ablation</strong></td><td>Removing or switching off one component to measure its contribution.</td></tr>
+<tr><td><strong>Cascade</strong></td><td>A system built from separate stages (ASR, then LLM), as opposed to one end-to-end speech model.</td></tr>
+</tbody>
+</table>
+
+<h3 id="g-models">Speech-model terms</h3>
+<table>
+<thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><strong>Speech LLM</strong></td><td>A language model that takes speech (and often produces speech) directly.</td></tr>
+<tr><td><strong>Full-duplex</strong></td><td>Listening and speaking at the same time, with both streams modeled jointly.</td></tr>
+<tr><td><strong>Moshi / Mimi / Helium</strong></td><td>The full-duplex model, its causal neural audio codec, and its text LLM backbone.</td></tr>
+<tr><td><strong>Qwen2.5-Omni: Thinker / Talker</strong></td><td>The multimodal text LLM, and the speech-generating decoder fed by it.</td></tr>
+<tr><td><strong>Semantic vs. acoustic tokens</strong></td><td>Tokens carrying linguistic content vs. those carrying voice and acoustic detail.</td></tr>
+<tr><td><strong>VQ / RVQ</strong></td><td>Vector quantization / residual vector quantization: discretizing audio features into codebook indices.</td></tr>
+<tr><td><strong>DiT, flow matching</strong></td><td>A diffusion Transformer, and a generative method that transports noise to data along a learned path. Qwen2.5-Omni uses it to produce mel frames from speech codes.</td></tr>
+<tr><td><strong>BigVGAN</strong></td><td>A neural vocoder turning mel-spectrograms into waveforms.</td></tr>
+<tr><td><strong>PAD / EPAD</strong></td><td>Moshi's padding and end-of-padding tokens that time-align its own text with its audio.</td></tr>
+<tr><td><strong>Inner monologue</strong></td><td>Moshi predicting its own aligned text before the audio tokens, to improve linguistic quality.</td></tr>
+<tr><td><strong>Whisper / IndicWhisper</strong></td><td>OpenAI's ASR family / community fine-tunes of it for Indian languages.</td></tr>
+<tr><td><strong>TTS</strong></td><td>Text-to-speech. Here, <code>facebook/mms-tts-tel</code> generates the evaluation audio.</td></tr>
+</tbody>
+</table>
+
+<h3 id="g-conv">Conversation terms (Part I)</h3>
+<table>
+<thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><strong>Floor</strong></td><td>Who currently "has the turn" in a conversation.</td></tr>
+<tr><td><strong>Backchannel</strong></td><td>A listener's short acknowledgment ("mm-hm") that does not take the floor.</td></tr>
+<tr><td><strong>Hesitation pause</strong></td><td>A pause inside a speaker's own turn; the speaker is not finished.</td></tr>
+<tr><td><strong>Genuine interruption</strong></td><td>The user takes the floor while the assistant is speaking.</td></tr>
+<tr><td><strong>Continue / hold / yield</strong></td><td>The controller's three actions: keep talking, briefly pause output, or give up the floor and clear pending audio.</td></tr>
+<tr><td><strong>False yield</strong></td><td>Giving up the floor when the assistant should have kept it.</td></tr>
+<tr><td><strong>Missed interruption</strong></td><td>Failing to stop within the deadline after a genuine interruption.</td></tr>
+<tr><td><strong>Interruption-to-yield latency</strong></td><td>Time from annotated interruption onset to actual playback stopping.</td></tr>
+</tbody>
+</table>
+
+<h2 id="faq">FAQ and troubleshooting</h2>
+
+<h3 id="q-unicode"><code>UnicodeEncodeError: 'charmap' codec can't encode characters</code></h3>
+<p>Windows consoles often use cp1252, which cannot print Telugu. Write results to a file, or run <code>set PYTHONIOENCODING=utf-8</code> (PowerShell: <code>$env:PYTHONIOENCODING = "utf-8"</code>) before running. The code itself writes UTF-8 JSON and CSV.</p>
+
+<h3 id="q-generation-config"><code>ValueError: The generation config is outdated...</code></h3>
+<p>You passed <code>language</code> or <code>task</code> to a checkpoint whose <code>generation_config.json</code> predates that API. Set <code>asr.language: null</code> for single-language fine-tunes. See <a href="pipeline.html#models">Pipeline</a>.</p>
+
+<h3 id="q-script">My ASR output is in the wrong script and WER is above 1</h3>
+<p>You are probably using a general multilingual checkpoint (such as <code>openai/whisper-small</code>) for Telugu. Use a Telugu-specific model, or a larger general one (<code>whisper-large-v3</code>) if memory allows. A WER above 1 is a signal to look at the raw transcripts.</p>
+
+<h3 id="q-oom">CUDA out of memory</h3>
+<p>Both models stay loaded at once. Use smaller checkpoints (the defaults already are), set <code>runtime.device: cpu</code> (slow), or free GPU memory. Whisper-large-v3 plus Qwen2.5-7B-Instruct needs roughly 18 GB in fp16.</p>
+
+<h3 id="q-modules"><code>ModuleNotFoundError: No module named 'soundfile'</code></h3>
+<p>Dependencies are not installed in the active Python. Run <code>python -m pip install -r requirements.txt</code> and confirm <code>python</code> is the interpreter you installed into.</p>
+
+<h3 id="q-tests"><code>No module named 'tests.test_...'</code></h3>
+<p>The tests folder is not a package. Use <code>python -m unittest discover -s tests -v</code>, or add <code>-p test_name.py</code> for one file.</p>
+
+<h3 id="q-warnings">Warnings I can ignore</h3>
+<ul>
+<li><em>"unauthenticated requests to the HF Hub"</em>: set <code>HF_TOKEN</code> for higher rate limits; downloads still work without it.</li>
+<li><em>"Using chunk_length_s is very experimental with seq2seq models"</em>: transformers' general caution about chunked Whisper decoding. The clips here are short, well under 30 s.</li>
+<li><em>"torch_dtype is deprecated"</em> and <em>"Both max_new_tokens and max_length seem to have been set"</em>: library deprecation notices; <code>max_new_tokens</code> takes precedence.</li>
+<li><em>"generation flags are not valid and may be ignored: temperature, top_p"</em>: sampling flags unused under greedy decoding.</li>
+</ul>
+
+<h3 id="q-push"><code>git push</code> fails with HTTP 408 or "Connection was reset"</h3>
+<p>That is the network path to GitHub, not a repository problem (reads still work). Try again on a steadier connection, and turn off any VPN or tunnel (such as Cloudflare WARP) that may be interfering with large uploads. Local commits are safe until the push succeeds.</p>
+
+<h3 id="q-numbers">Why are my numbers slightly different from the docs?</h3>
+<p>Fresh TTS synthesis is not seeded, so the audio differs. See <a href="repro.html#determinism">what is deterministic</a>.</p>
+
+<h3 id="q-onepdf">Which PDF is the main report?</h3>
+<p><code>reports/report.pdf</code>, the single paper. <code>task1.pdf</code> and <code>task2.pdf</code> are longer companions.</p>
+
+<h3 id="q-proposal">Does Part II test Part I's proposal?</h3>
+<p>No. Part II measures a cascaded pipeline, which has no floor-control decision. The proposal is specified but not run; see <a href="proposal.html">the proposal page</a>.</p>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

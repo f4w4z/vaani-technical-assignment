@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Requirements | Report</title>
+<meta name="description" content="What the report set out to cover, and where each requirement is met.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem('docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+</head>
+<body data-page="requirements">
+<main id="content">
+
+<div class="eyebrow">Start</div>
+<h1>Requirements</h1>
+<p class="lead">What the report is required to cover, and a checklist mapping each requirement to the page that meets it.</p>
+
+<h2 id="scope">Scope</h2>
+<p>The report has two parts. Part I is an analysis of speech language-model architectures with a proposed improvement. Part II is an implemented, evaluated Indic speech pipeline. The focus throughout is research reasoning: identifying gaps, forming hypotheses, designing experiments, and reporting results honestly, rather than only implementing existing models.</p>
+<table>
+<tbody>
+<tr><th>Area</th><td>Speech foundation models, Speech LLMs, ASR, multilingual (Indic) speech understanding</td></tr>
+<tr><th>Part I</th><td>Comparative architectural analysis of two recent Speech LLMs, with diagrams and a proposed improvement</td></tr>
+<tr><th>Part II</th><td>A reproducible Indic speech pipeline with its own evaluation infrastructure, evaluated on at least 100 examples</td></tr>
+<tr><th>Deliverables</th><td>A PDF report and a repository with a README of reproduction steps</td></tr>
+</tbody>
+</table>
+
+<h2 id="part1">Part I: architecture analysis</h2>
+<p>Select and critically analyze two recent Speech LLM architectures, at least one with speech-to-speech generation. Deliver a comparative analysis with diagrams and a proposed improvement.</p>
+<table>
+<thead><tr><th>Requirement</th><th>Where it is met</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>Two recent Speech LLMs</td><td>Moshi and Qwen2.5-Omni. <a href="task1.html#choice">Why these two</a></td><td><span class="badge good">Met</span></td></tr>
+<tr><td>At least one speech-to-speech</td><td>Both generate speech: Moshi end to end, Qwen2.5-Omni via its Talker</td><td><span class="badge good">Met</span></td></tr>
+<tr><td>1. Speech encoder and representation learning</td><td><a href="task1.html#axes">Axis 1</a></td><td><span class="badge good">Met</span></td></tr>
+<tr><td>2. Semantic vs. acoustic representations</td><td><a href="task1.html#axes">Axis 2</a>: Moshi's split quantizer, Qwen's Thinker/Talker conditioning</td><td><span class="badge good">Met</span></td></tr>
+<tr><td>3. Speech-to-LLM alignment (adapters, projectors, cross-attention)</td><td><a href="task1.html#axes">Axis 3</a></td><td><span class="badge good">Met</span></td></tr>
+<tr><td>4. Streaming vs. non-streaming</td><td><a href="task1.html#axes">Axis 4</a></td><td><span class="badge good">Met</span></td></tr>
+<tr><td>5. Autoregressive vs. non-autoregressive generation</td><td><a href="task1.html#axes">Axis 5</a></td><td><span class="badge good">Met</span></td></tr>
+<tr><td>6. End-of-speech detection and stopping criteria</td><td><a href="task1.html#axes">Axis 6</a> and <a href="task1.html#four-decisions">four decisions</a></td><td><span class="badge good">Met</span></td></tr>
+<tr><td>7. Training objectives and data requirements</td><td><a href="task1.html#axes">Axis 7</a></td><td><span class="badge good">Met</span></td></tr>
+<tr><td>Research question: the main architectural limitations preventing low-latency, natural, real-time conversation</td><td><a href="task1.html#limitations">Three ranked limitations</a></td><td><span class="badge good">Answered</span></td></tr>
+<tr><td>Diagrams</td><td><a href="task1.html#fig-architecture">Architecture and timing</a>, <a href="task1.html#fig-events">conversational events</a>, <a href="proposal.html#fig-matrix">experimental design</a></td><td><span class="badge good">Met</span></td></tr>
+<tr><td>A proposed improvement</td><td><a href="proposal.html">Generation-state-aware yielding controller</a></td><td><span class="badge good">Met</span> <span class="badge warn">Specified, not run</span></td></tr>
+</tbody>
+</table>
+
+<h2 id="part2">Part II: implementation and evaluation</h2>
+<p>Build an Indic pipeline (speech input, ASR, language model, text response) from pretrained models, with the evaluation infrastructure written in the repository, evaluated on at least 100 examples.</p>
+<table>
+<thead><tr><th>Requirement</th><th>Where it is met</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>Indic speech-to-text-response pipeline</td><td><a href="pipeline.html">Pipeline</a>: Telugu Whisper fine-tune to Qwen2.5-1.5B-Instruct</td><td><span class="badge good">Met</span></td></tr>
+<tr><td>Own evaluation infrastructure</td><td><code>evaluate.py</code> (Levenshtein WER and CER from scratch), <code>prepare_data.py</code>, <code>plot_results.py</code>, <code>hallucination.py</code>, <code>bootstrap.py</code>. No evaluation library is used. <a href="modules.html">Modules</a></td><td><span class="badge good">Met</span></td></tr>
+<tr><td>At least 100 examples</td><td>129 per condition. <a href="dataset.html">Dataset</a></td><td><span class="badge good">Met</span></td></tr>
+<tr><td>ASR WER and CER</td><td>Corpus and per-sample, with mean, median and p95. <a href="results.html#baseline">Results</a></td><td><span class="badge good">Met</span></td></tr>
+<tr><td>Response correctness and hallucination rate, with clearly defined criteria</td><td>Word-overlap F1, exact match, and a three-way correct / abstained / hallucinated classification. <a href="metrics.html#hallucination">Definition</a>, <a href="results.html#correctness">results</a></td><td><span class="badge good">Met</span></td></tr>
+<tr><td>Processing latency, including real-time factor</td><td>ASR, LLM and total seconds with mean, p50 and p95, plus pipeline and ASR-only RTF. <a href="metrics.html#latency">Definition</a></td><td><span class="badge good">Met</span></td></tr>
+<tr><td>At least two linguistic or acoustic conditions</td><td>Clean vs. 0 dB SNR noisy, with paired bootstrap intervals</td><td><span class="badge good">Met</span></td></tr>
+<tr><td>Research extension: a measurable bottleneck and one improvement, compared with the baseline</td><td>Noise raises WER (the bottleneck); spectral-subtraction denoising is the improvement. <a href="extension.html">Extension</a></td><td><span class="badge good">Met</span> <span class="badge warn">Improvement did not help</span></td></tr>
+<tr><td>Working code, evaluation results, ablation analysis</td><td>The repository; <a href="results.html">results</a>; the baseline vs. denoised ablation and a parameter sweep</td><td><span class="badge good">Met</span></td></tr>
+</tbody>
+</table>
+
+<div class="callout good"><span class="title">A negative result still meets the requirement</span>
+The requirement is to identify a bottleneck, implement one improvement, and compare it with the baseline. It does not require the improvement to win. The denoiser was implemented, tested on identical audio, swept over parameters, and reported with confidence intervals.</div>
+
+<h2 id="deliverables">Deliverables</h2>
+<table>
+<thead><tr><th>Item</th><th>Location</th></tr></thead>
+<tbody>
+<tr><td>Single PDF report covering both parts</td><td><a href="assets/pdf/report.pdf">report.pdf</a></td></tr>
+<tr><td>Longer standalone write-ups</td><td><a href="assets/pdf/task1.pdf">task1.pdf</a>, <a href="assets/pdf/task2.pdf">task2.pdf</a></td></tr>
+<tr><td>Code, configs, tests and README with reproduction steps</td><td><a href="https://github.com/f4w4z/vaani-technical-assignment" target="_blank" rel="noopener">GitHub repository</a>; see also <a href="quickstart.html#reproduce">Quickstart</a></td></tr>
+</tbody>
+</table>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

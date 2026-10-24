@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dataset | Report</title>
+<meta name="description" content="How the 129-question Telugu evaluation corpus is synthesized, the question templates, the noise condition, and the file formats.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem('docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+</head>
+<body data-page="dataset">
+<main id="content">
+
+<div class="eyebrow">Part II: Pipeline</div>
+<h1>Dataset</h1>
+<p class="lead">No recorded Telugu corpus exists locally, so the evaluation set is synthesized: 129 template questions with exact reference answers, spoken by an open Telugu TTS model, in a clean and a noisy version.</p>
+
+<div class="callout warn"><span class="title">Synthetic speech, not real speakers</span>
+The numbers in these docs say nothing about accents, prosody, disfluency or recording channels. Treat them as a controlled, reproducible baseline, not as field accuracy.</div>
+
+<h2 id="overview">Overview</h2>
+<table>
+<tbody>
+<tr><th>Size</th><td>129 questions per condition (29 capitals + 100 additions). The requirement is at least 100.</td></tr>
+<tr><th>Language</th><td>Telugu, Telugu script for text.</td></tr>
+<tr><th>TTS model</th><td><code>facebook/mms-tts-tel</code> (MMS, VITS-based), run through <code>transformers</code>' <code>VitsModel</code>.</td></tr>
+<tr><th>Conditions</th><td><strong>clean</strong>: synthesized audio as is. <strong>noisy</strong>: additive white Gaussian noise at <strong>0 dB SNR</strong>.</td></tr>
+<tr><th>Generator</th><td><code>synthesize_corpus.py</code></td></tr>
+<tr><th>Why templates</th><td>Every reference answer states exactly one checkable fact, which makes correctness and hallucination testable without a human judge. See <a href="metrics.html#hallucination">the hallucination metric</a>.</td></tr>
+</tbody>
+</table>
+
+<h2 id="templates">Question templates</h2>
+<h3 id="capitals">29 state and country capitals</h3>
+<p>Pattern: question "&lt;place&gt; రాజధాని ఏది?" (What is the capital of &lt;place&gt;?), answer "&lt;place&gt; రాజధాని &lt;capital&gt;." This follows the example pattern given in the requirements. IDs are <code>cap-001</code> to <code>cap-029</code>.</p>
+<table class="compact">
+<thead><tr><th>#</th><th>Place</th><th class="te">Telugu</th><th>Capital</th><th class="te">Telugu</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Telangana</td><td class="te">తెలంగాణ</td><td>Hyderabad</td><td class="te">హైదరాబాద్</td></tr>
+<tr><td>2</td><td>Andhra Pradesh</td><td class="te">ఆంధ్రప్రదేశ్</td><td>Amaravati</td><td class="te">అమరావతి</td></tr>
+<tr><td>3</td><td>Tamil Nadu</td><td class="te">తమిళనాడు</td><td>Chennai</td><td class="te">చెన్నై</td></tr>
+<tr><td>4</td><td>Karnataka</td><td class="te">కర్ణాటక</td><td>Bengaluru</td><td class="te">బెంగళూరు</td></tr>
+<tr><td>5</td><td>Kerala</td><td class="te">కేరళ</td><td>Thiruvananthapuram</td><td class="te">తిరువనంతపురం</td></tr>
+<tr><td>6</td><td>Maharashtra</td><td class="te">మహారాష్ట్ర</td><td>Mumbai</td><td class="te">ముంబై</td></tr>
+<tr><td>7</td><td>Gujarat</td><td class="te">గుజరాత్</td><td>Gandhinagar</td><td class="te">గాంధీనగర్</td></tr>
+<tr><td>8</td><td>Rajasthan</td><td class="te">రాజస్థాన్</td><td>Jaipur</td><td class="te">జైపూర్</td></tr>
+<tr><td>9</td><td>Punjab</td><td class="te">పంజాబ్</td><td>Chandigarh</td><td class="te">చండీగఢ్</td></tr>
+<tr><td>10</td><td>West Bengal</td><td class="te">పశ్చిమ బెంగాల్</td><td>Kolkata</td><td class="te">కోల్‌కతా</td></tr>
+<tr><td>11</td><td>Bihar</td><td class="te">బీహార్</td><td>Patna</td><td class="te">పాట్నా</td></tr>
+<tr><td>12</td><td>Odisha</td><td class="te">ఒడిశా</td><td>Bhubaneswar</td><td class="te">భువనేశ్వర్</td></tr>
+<tr><td>13</td><td>Madhya Pradesh</td><td class="te">మధ్యప్రదేశ్</td><td>Bhopal</td><td class="te">భోపాల్</td></tr>
+<tr><td>14</td><td>Uttar Pradesh</td><td class="te">ఉత్తరప్రదేశ్</td><td>Lucknow</td><td class="te">లక్నో</td></tr>
+<tr><td>15</td><td>Haryana</td><td class="te">హర్యానా</td><td>Chandigarh</td><td class="te">చండీగఢ్</td></tr>
+<tr><td>16</td><td>Assam</td><td class="te">అస్సాం</td><td>Dispur</td><td class="te">దిస్పూర్</td></tr>
+<tr><td>17</td><td>Chhattisgarh</td><td class="te">ఛత్తీస్‌గఢ్</td><td>Raipur</td><td class="te">రాయ్‌పూర్</td></tr>
+<tr><td>18</td><td>Jharkhand</td><td class="te">జార్ఖండ్</td><td>Ranchi</td><td class="te">రాంచీ</td></tr>
+<tr><td>19</td><td>Goa</td><td class="te">గోవా</td><td>Panaji</td><td class="te">పనాజీ</td></tr>
+<tr><td>20</td><td>Sikkim</td><td class="te">సిక్కిం</td><td>Gangtok</td><td class="te">గ్యాంగ్‌టక్</td></tr>
+<tr><td>21</td><td>Manipur</td><td class="te">మణిపూర్</td><td>Imphal</td><td class="te">ఇంఫాల్</td></tr>
+<tr><td>22</td><td>Meghalaya</td><td class="te">మేఘాలయ</td><td>Shillong</td><td class="te">షిల్లాంగ్</td></tr>
+<tr><td>23</td><td>Nagaland</td><td class="te">నాగాలాండ్</td><td>Kohima</td><td class="te">కోహిమా</td></tr>
+<tr><td>24</td><td>Tripura</td><td class="te">త్రిపుర</td><td>Agartala</td><td class="te">అగర్తలా</td></tr>
+<tr><td>25</td><td>Mizoram</td><td class="te">మిజోరం</td><td>Aizawl</td><td class="te">ఐజ్వాల్</td></tr>
+<tr><td>26</td><td>Arunachal Pradesh</td><td class="te">అరుణాచల్ ప్రదేశ్</td><td>Itanagar</td><td class="te">ఇటానగర్</td></tr>
+<tr><td>27</td><td>Uttarakhand</td><td class="te">ఉత్తరాఖండ్</td><td>Dehradun</td><td class="te">డెహ్రాడూన్</td></tr>
+<tr><td>28</td><td>Himachal Pradesh</td><td class="te">హిమాచల్ ప్రదేశ్</td><td>Shimla</td><td class="te">షిమ్లా</td></tr>
+<tr><td>29</td><td>India</td><td class="te">భారతదేశ</td><td>New Delhi</td><td class="te">న్యూఢిల్లీ</td></tr>
+</tbody>
+</table>
+
+<h3 id="addition">100 addition problems</h3>
+<p>Every ordered pair (a, b) with a and b from 1 to 10, spoken with Telugu number words, so sums run from 2 to 20. IDs are <code>sum-001</code> to <code>sum-100</code>. Pattern: question "&lt;a&gt; మరియు &lt;b&gt; కలిపితే ఎంత వస్తుంది?" (what do a and b make together?), answer "&lt;a&gt; మరియు &lt;b&gt; కలిపితే &lt;sum&gt; వస్తుంది."</p>
+<p>Number words are spelled out (not digits) so the TTS pronounces them naturally. Both orders of each pair appear, which adds variety without new vocabulary.</p>
+<table class="compact">
+<thead><tr><th>n</th><th class="te">Telugu</th><th>n</th><th class="te">Telugu</th><th>n</th><th class="te">Telugu</th><th>n</th><th class="te">Telugu</th></tr></thead>
+<tbody>
+<tr><td>1</td><td class="te">ఒకటి</td><td>6</td><td class="te">ఆరు</td><td>11</td><td class="te">పదకొండు</td><td>16</td><td class="te">పదహారు</td></tr>
+<tr><td>2</td><td class="te">రెండు</td><td>7</td><td class="te">ఏడు</td><td>12</td><td class="te">పన్నెండు</td><td>17</td><td class="te">పదిహేడు</td></tr>
+<tr><td>3</td><td class="te">మూడు</td><td>8</td><td class="te">ఎనిమిది</td><td>13</td><td class="te">పదమూడు</td><td>18</td><td class="te">పద్దెనిమిది</td></tr>
+<tr><td>4</td><td class="te">నాలుగు</td><td>9</td><td class="te">తొమ్మిది</td><td>14</td><td class="te">పదనాలుగు</td><td>19</td><td class="te">పందొమ్మిది</td></tr>
+<tr><td>5</td><td class="te">ఐదు</td><td>10</td><td class="te">పది</td><td>15</td><td class="te">పదిహేను</td><td>20</td><td class="te">ఇరవై</td></tr>
+</tbody>
+</table>
+<div class="callout note"><span class="title">Where the questions' correctness comes from</span>
+The capitals and number words are fixed lists in <code>synthesize_corpus.py</code>, and the sums are computed, so a reference answer cannot be wrong by construction. They are template-generated, not reviewed by a Telugu linguist; a grammatical wrinkle in a phrase would be in the template, not random.</div>
+
+<h2 id="noise">The noisy condition</h2>
+<p>Zero-mean Gaussian noise is added to the clean waveform at a fixed signal-to-noise ratio:</p>
+<pre><code>noise_power = signal_power / 10^(snr_db / 10)
+noisy = clean + Normal(0, sqrt(noise_power))
+if max(|noisy|) &gt; 1: noisy = noisy / max(|noisy|)     # avoid clipping</code></pre>
+<p>At <strong>0 dB</strong>, noise power equals signal power. The noise generator is seeded (<code>numpy</code> seed 42), so the same noisy waveform is produced for the same clean waveform.</p>
+<div class="callout good"><span class="title">Why 0 dB and not 8 dB</span>
+The corpus was first built at 8 dB SNR. Corpus WER there was 0.2913 vs. 0.2928 clean: no measurable bottleneck, so nothing for a fix to address. The noise was raised to 0 dB, which produced a real WER increase (+0.045, CI +0.014 to +0.077). The script's <em>default</em> is still 8 dB (<code>TARGET_SNR_DB = 8.0</code>); the reported results pass <code>--snr-db 0</code>.</div>
+
+<h2 id="formats">File formats</h2>
+<h3 id="corpus-format">Synthesized corpus folder</h3>
+<p><code>corpus_clean/</code> and <code>corpus_noisy/</code> use <code>prepare_data.py</code>'s sidecar format, one triple per question:</p>
+<pre><code>corpus_clean/
+  question_cap-001.wav             audio (sample rate = the TTS model's rate)
+  question_cap-001.txt             reference transcript = the spoken question
+  question_cap-001.response.txt    reference answer
+  ...
+  question_sum-100.{wav,txt,response.txt}</code></pre>
+<h3 id="manifest-format">Evaluator manifest</h3>
+<p><code>prepare_data.py --limit 0</code> turns a folder into <code>data/test_clean.json</code> / <code>data/test_noisy.json</code> plus a <code>.metadata.json</code>. Each row:</p>
+<pre><code>{
+  "id": "te-000001",
+  "audio_path": "../corpus_clean/question_cap-001.wav",
+  "ground_truth_transcript": "...",
+  "ground_truth_response": "...",
+  "response_source": "provided"
+}</code></pre>
+<ul>
+<li><code>id</code> is <code>te-NNNNNN</code> by position in the sorted source listing (the folder format carries no ID of its own). The original <code>cap-</code>/<code>sum-</code> label survives in the audio file name, which <code>hallucination.py</code> relies on.</li>
+<li><code>audio_path</code> is relative to the manifest's directory.</li>
+<li><code>response_source</code> is <code>provided</code> for every row here. A <code>placeholder</code> mode exists for plumbing tests only; it fills missing answers with a fixed string and marks the dataset as not valid for response-quality scoring. None is used here (0 placeholders).</li>
+<li>Selection is reproducible (seeded) and validation stops on missing audio, duplicate audio or IDs, or empty labels instead of silently dropping samples.</li>
+</ul>
+
+<h2 id="pairing">Clean and noisy are not matched recordings</h2>
+<p>The noisy corpus is not the clean audio plus noise. The TTS model's duration prediction is not seeded, and the noisy set was regenerated once at the harsher SNR, so each condition is an independent rendering of the same text. Consequences:</p>
+<ul>
+<li>The clean-vs-noisy WER gap includes natural TTS rendering variance, not noise alone. The paired bootstrap over questions still shows the gap is real.</li>
+<li>The <strong>baseline-vs-denoised</strong> comparison <em>is</em> exactly matched: both runs read the identical <code>corpus_noisy/</code> files and differ only in the <code>asr.denoise</code> flag. The extension's conclusion rests on that comparison.</li>
+</ul>
+
+</main>
+<script src="assets/search-index.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
